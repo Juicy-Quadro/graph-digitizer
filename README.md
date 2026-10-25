@@ -1,22 +1,45 @@
 # Graph Digitizer · 图表数字化工具
 
-把图片里的曲线变成可用的数据表。Windows 桌面应用（Electron），界面中英双语可随时切换。
+把图片里的曲线变成可用的数据表，把云图里的颜色变成数值。Windows 桌面应用（Electron），界面中英双语可随时切换。
 
 > A Windows desktop application that turns curves inside images into real data
-> tables. Four point calibration, automatic line tracing and area sampling,
-> with export to eight formats.
+> tables, and the colours of a contour map into numbers. Four point calibration,
+> automatic line tracing, area sampling and colour bar extraction, with export
+> to eight formats.
 
 ![Graph Digitizer](screenshots/trace-en-dark.png)
 
-| | |
-|---|---|
-| ![中文界面](screenshots/drag-zh-light.png) | ![设置](screenshots/settings-auto-auto.png) |
-| 中文界面 · 区域取点 | 设置：语言 / 主题（跟随系统） |
+| | | |
+|---|---|---|
+| ![自动追踪](screenshots/trace-en-dark.png) | ![云图提取](screenshots/cloudresult-zh-dark.png) | ![AI 提取曲线](screenshots/aicurves-en-dark.png) |
+| **自动追踪**：沿曲线取点，直接进数据表 | **云图提取**：框选色标 → 读出刻度 → 还原整幅图的数值 | **AI 提取曲线**：模型读出曲线，作为新系列加入 |
+
+| | | |
+|---|---|---|
+| ![区域取点](screenshots/drag-zh-light.png) | ![云图提取（浅色）](screenshots/cloudresult-en-light.png) | ![设置](screenshots/settings-zh-light.png) |
+| **区域取点**：矩形网格采样，适合虚线 | 同一功能的浅色主题 | **设置**：语言 / 主题 / AI 密钥 |
 
 | | |
 |---|---|
-| ![云图提取](screenshots/cloud-zh-dark.png) | |
-| 云图提取 · 框选色标后读出刻度值 | |
+| ![空状态引导](screenshots/empty-en-dark.png) | |
+| 首次打开的三步引导卡 | |
+
+---
+
+## v1.3.1 更新
+
+**真实论文图回归修的两个真 bug**
+
+回归不再只用合成图，而是从 **arXiv 论文源码包**里取真实图（arXiv 2601.00342），裁出四个带色标的面板（jet 色标、发散色标、标签只标中段、全负值区间）做回归。色标矩形和刻度标签位置由**程序测量**，真值不靠手抄像素坐标。
+
+真实图当场抓出两个缺陷，都已修：
+
+- **颜色查找表太粗**：原来用 32×32×32 固定查找表，一格 8 个色阶——而 1800 像素长的色标上 8 个色阶相当于 **57 像素**，颜色认错了带，数值偏 **2%**。改成精确最近邻搜索后降到 **0.8%**
+- **锚点外的值被压平**：真实论文里标签常常只标中间几段，原实现把锚点之外的值压平成端点值，等于把一段云图全报成同一个数。改成沿最近两个锚点的直线外推
+
+实测颜色读数误差 **0.73%–1.72%（量程百分比）**，覆盖 jet 与发散色标、标签只标中段等真实情况。
+
+**回归套件扩到八套、179 项断言**，新增真实论文图回归（20 项）。
 
 ---
 
@@ -33,8 +56,6 @@
 **新增：AI 提取曲线**
 
 - `Curve Detection` 面板里多了一个 `Extract curves with AI`：模型读出图里的曲线，作为新系列直接进数据表，走的是同一条 AI 通道、同一个密钥
-
-**回归套件扩到七套、159 项断言**，新增色标算法断言、模型解析离线断言、跨层一致性检查和云图/AI 曲线端到端断言。
 
 说明见 [`docs/CLOUD-MAP.md`](docs/CLOUD-MAP.md)。
 
@@ -74,10 +95,10 @@
 ## 快速开始 · Quick start
 
 **方式一：免安装便携版**
-下载 `GraphDigitizer-1.3.1-portable.exe`，双击即用，不写注册表、不装任何依赖。
+下载 `GraphDigitizer-1.3.2-portable.exe`，双击即用，不写注册表、不装任何依赖。
 
 **方式二：安装版**
-运行 `GraphDigitizer-1.3.1-x64.exe`，可自选安装目录，自动创建桌面与开始菜单快捷方式。
+运行 `GraphDigitizer-1.3.2-x64.exe`，可自选安装目录，自动创建桌面与开始菜单快捷方式。
 
 **方式三：从源码运行**
 
@@ -164,6 +185,11 @@ X 轴或 Y 轴选 `Logarithmic` 即为对数刻度（两个端点值都必须大
 
 **C. Add Point（`P`）/ Erase Point（`E`）** —— 手工补点、删点
 
+**D. Extract curves with AI** —— 让模型读图
+点 `Curve Detection` 面板里的 `Extract curves with AI`，视觉模型读出图里的曲线，作为**新系列**直接进数据表（归一化坐标会还原成像素位置，再按标定转成逻辑值）。和色标读刻度走同一条通道、同一个密钥。
+
+![AI 提取曲线](screenshots/aicurves-en-dark.png)
+
 ### 5. 导出 — Export（Ctrl+E）
 支持 **CSV / TXT / Excel(XML) / XML / JSON / SVG 图表 / AutoCAD DXF / PostScript EPS**。
 `Copy` 一键把数据以制表符分隔复制到剪贴板。
@@ -175,6 +201,8 @@ X 轴或 Y 轴选 `Logarithmic` 即为对数刻度（两个端点值都必须大
 ## 云图提取 · Cloud Map
 
 折线图只有一条曲线，云图（等值线填色图）却是**一整片连续数值场**——颜色本身就是数据。所以云图有独立的 `Cloud Map` 面板和独立的导出，不跟折线图的数据表混在一起。
+
+![云图提取](screenshots/cloudresult-zh-dark.png)
 
 ### 三步
 
@@ -198,7 +226,11 @@ X 轴或 Y 轴选 `Logarithmic` 即为对数刻度（两个端点值都必须大
 
 ### AI 密钥
 
-点 `Read with AI` 需要 MiniMax 的 API key。在 **设置（Ctrl+,）** 里有 `AI model key` 一栏，填进去保存即可。密钥用 `safeStorage` 加密后存在主进程，**永远不会进入界面层**，应用也不联网做别的事。
+点 `Read with AI` 或 `Extract curves with AI` 需要 MiniMax 的 API key。在 **设置（Ctrl+,）** 里有 `AI model key` 一栏，填进去保存即可。
+
+![设置](screenshots/settings-zh-light.png)
+
+密钥用 `safeStorage` 加密后存在主进程，**永远不会进入界面层**，应用也不联网做别的事。
 
 ### 精度
 

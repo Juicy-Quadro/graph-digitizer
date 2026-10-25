@@ -1050,12 +1050,6 @@
         return;
       }
     }
-    if (!window.gd || !window.gd.llmExtractCurves) {
-      if (!llmCurvesOverride) {
-        toast(t('cloud.noAi'), 'error');
-        return;
-      }
-    }
     toast(t('sample.aiWorking'), 'info');
     let res;
     try {
@@ -1064,11 +1058,19 @@
         width: image.width,
         height: image.height
       };
-      res = llmCurvesOverride
-        ? await llmCurvesOverride(payload)
-        : await window.gd.llmExtractCurves(payload);
+      if (llmCurvesOverride) {
+        res = await llmCurvesOverride(payload);
+      } else if (window.gd && window.gd.llmExtractCurves) {
+        res = await window.gd.llmExtractCurves(payload);
+      } else {
+        res = null;
+      }
     } catch (err) {
       toast(String(err && err.message ? err.message : err), 'error');
+      return;
+    }
+    if (!res) {
+      toast(t('cloud.noAi'), 'error');
       return;
     }
     if (!res || !res.ok) {

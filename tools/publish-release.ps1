@@ -38,7 +38,49 @@ $notes = @'
 
 Digitise data points out of graphs and plots in images.
 
-### What is new in 1.3.1
+### What is new in 1.3.2
+
+The readme now shows what the application actually does: the colour map
+extraction with its framed bar, its tick values and the field it recovered,
+the curves the model read out of a figure, the region sampling and the
+settings with the key of the model.
+
+- Six screenshots of the running application, in both themes and both
+  languages.
+- The colour map panel is shown from the framing of the bar to the exported
+  grid, so the whole path is visible in one picture.
+
+The release of 1.3.1 carries the two fixes that the real paper figures
+found. They are worth repeating here, because they change the numbers you
+get:
+
+- **The colour lookup was too coarse.** It used a fixed 32 x 32 x 32 table of
+  colours, and one cell of that table is eight units of colour - more than
+  fifty pixels of a colour bar that is eighteen hundred pixels long. The
+  colour of a pixel was therefore matched to the wrong band and the number
+  came out about two percent off. The lookup now searches for the exact
+  nearest band, and the error is below one percent of the value range.
+- **The tick labels of a colour bar usually do not reach its ends.** On a
+  real figure the labels only cover the middle of the bar, and the values
+  outside the known labels were held flat, which reports the same number
+  for a whole part of the figure. They are now continued along the line of
+  the nearest two labels.
+
+Measured on four panels with a colour bar taken from arXiv 2601.00342,
+covering a jet map, a diverging map and labels that stop in the middle of
+the bar:
+
+| panel | colour map | tick labels | error |
+|---|---|---|---|
+| uv_a1 | jet | 5 / 0 / -5 (1e-1) | 0.77 percent of the range |
+| uv_a2 | jet | 5 / 0 / -5 (1e-1) | 0.77 percent of the range |
+| uv_a3 | diverging | 1 / 0 (1e-6) | 1.72 percent of the range |
+| uv_b1 | jet | -6 / -7 (1e-2) | 0.73 percent of the range |
+
+The largest error is at the flat end of a colour map, where the colour
+simply does not tell the number.
+
+### What was new in 1.3.1
 
 The colour bar of a contour map is now read more accurately. Two defects
 were found by running the extraction on the figures of real papers, and both
