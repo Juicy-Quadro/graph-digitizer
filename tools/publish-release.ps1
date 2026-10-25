@@ -122,15 +122,17 @@ $notes = $notes.Replace('__SHA_INSTALLER__', (Get-Sha256 $installer))
 $notes = $notes.Replace('__SHA_PORTABLE__', (Get-Sha256 $portable))
 
 # ---------------------------------------------------------------- release
+$version = $Tag.TrimStart('v')
+$releaseName = 'Graph Digitizer ' + $version
 $existing = @(Invoke-RestMethod -Uri "$api/releases" -Headers $headers -Method Get -TimeoutSec 60 |
     Where-Object { $_.tag_name -eq $Tag })
 if ($existing.Count -eq 0) {
     Write-Host '--- creating the release ---'
-    $payload = @{ tag_name = $Tag; name = 'Graph Digitizer 1.0.0'; body = $notes; draft = $false; prerelease = $false } | ConvertTo-Json
+    $payload = @{ tag_name = $Tag; name = $releaseName; body = $notes; draft = $false; prerelease = $false } | ConvertTo-Json
     $release = Invoke-RestMethod -Uri "$api/releases" -Headers $headers -Method Post -Body $payload -ContentType 'application/json' -TimeoutSec 60
 } else {
     Write-Host '--- updating the release notes ---'
-    $payload = @{ tag_name = $Tag; name = 'Graph Digitizer 1.0.0'; body = $notes; draft = $false; prerelease = $false } | ConvertTo-Json
+    $payload = @{ tag_name = $Tag; name = $releaseName; body = $notes; draft = $false; prerelease = $false } | ConvertTo-Json
     $release = Invoke-RestMethod -Uri "$api/releases/$($existing[0].id)" -Headers $headers -Method Patch -Body $payload -ContentType 'application/json' -TimeoutSec 60
 }
 Write-Host ("    release id = " + $release.id)
