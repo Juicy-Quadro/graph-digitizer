@@ -22,3 +22,6 @@ desktop.ini
 
 # Scratch scripts kept out of the repository
 tools/_scratch/
+
+# Local credential file (never commit)
+.github-token.txt
