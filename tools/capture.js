@@ -88,6 +88,69 @@ app.whenReady().then(async () => {
     await new Promise((r) => setTimeout(r, 40));
     fire('pointerup', 820, 430, 0);
     ` : ''}
+    ${scene === 'cloud' ? `
+    // A contour map with a colour bar, framed and extracted.
+    const W = 520, H = 360;
+    const c = document.createElement('canvas');
+    c.width = W; c.height = H;
+    const cx = c.getContext('2d');
+    const jet = (t) => {
+      t = Math.max(0, Math.min(1, t));
+      if (t < 0.375) return 'rgb(0,' + Math.round(255 * (t / 0.375)) + ',255)';
+      if (t < 0.75) return 'rgb(0,255,' + Math.round(255 * (1 - (t - 0.375) / 0.375)) + ')';
+      return 'rgb(' + Math.round(255 * ((t - 0.75) / 0.25)) + ',' + Math.round(255 * (1 - (t - 0.75) / 0.25)) + ',0)';
+    };
+    for (let y = 40; y < 300; y++) {
+      for (let x = 40; x < 420; x++) {
+        const v = 20 + 60 * (0.5 + 0.5 * Math.sin(x / 70) * Math.cos(y / 55));
+        cx.fillStyle = jet(v / 100);
+        cx.fillRect(x, y, 1, 1);
+      }
+    }
+    for (let y = 40; y < 300; y++) {
+      cx.fillStyle = jet(1 - (y - 40) / 260);
+      cx.fillRect(460, y, 24, 1);
+    }
+    cx.fillStyle = '#000';
+    cx.font = '13px Arial';
+    cx.textBaseline = 'middle';
+    cx.fillText('80', 440, 46);
+    cx.fillText('40', 440, 168);
+    cx.fillText('0', 440, 292);
+    await g.loadImage(c.toDataURL('image/png'), 'contour.png', 'C:/tmp/contour.png');
+    g.view.fit();
+    g.setLlmReadBar(() => ({
+      ok: true,
+      ticks: [
+        { label: '80', value: 80, position: 6 },
+        { label: '40', value: 40, position: 128 },
+        { label: '0', value: 0, position: 258 }
+      ]
+    }));
+    // Frame the colour bar with a real drag.
+    const canvas = document.getElementById('canvas');
+    const box = canvas.getBoundingClientRect();
+    const view = g.view.getView();
+    const at = (x, y) => ({ x: box.left + x * view.zoom + view.offsetX, y: box.top + y * view.zoom + view.offsetY });
+    const fire = (type, p, buttons) => canvas.dispatchEvent(new PointerEvent(type, {
+      clientX: p.x, clientY: p.y, button: 0, buttons: buttons,
+      bubbles: true, cancelable: true, pointerId: 1, isPrimary: true
+    }));
+    document.querySelector('[data-action="cloud-pick-bar"]').click();
+    fire('pointerdown', at(460, 40), 1);
+    await new Promise((r) => setTimeout(r, 40));
+    fire('pointermove', at(484, 300), 1);
+    await new Promise((r) => setTimeout(r, 40));
+    fire('pointerup', at(484, 300), 0);
+    await new Promise((r) => setTimeout(r, 120));
+    document.querySelector('[data-action="cloud-ai-ticks"]').click();
+    await new Promise((r) => setTimeout(r, 250));
+    document.querySelector('[data-action="cloud-extract"]').click();
+    await new Promise((r) => setTimeout(r, 400));
+    const panel = document.querySelector('[data-panel="cloud"]');
+    if (panel) panel.scrollIntoView({ block: 'start' });
+    await new Promise((r) => setTimeout(r, 200));
+    ` : ''}
     return 'done';
   })()`;
 

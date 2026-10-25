@@ -476,6 +476,77 @@ ${body}
     return out.join('\r\n');
   }
 
+  // ------------------------------------------------------------------ Grid
+
+  /*
+   * The colour map field is not a list of points but a grid of values, so it
+   * gets its own writers instead of pretending to be a series.
+   */
+
+  /** The coordinate of one cell of the grid. */
+  function gridCellCoordinate(field, gx, gy, transform) {
+    const px = field.origin.x + gx * field.step;
+    const py = field.origin.y + gy * field.step;
+    if (transform) {
+      const p = transform(px, py);
+      if (!p) return null;
+      return { x: p.x, y: p.y };
+    }
+    return { x: px, y: py };
+  }
+
+  /**
+   * The field as a wide table: the first row holds the X coordinates, every
+   * other row starts with its Y coordinate and continues with the values.
+   * This is the shape Excel and Origin expect from a contour map.
+   */
+  function toGridCSV(field, options) {
+    const opt = options || {};
+    const decimals = opt.decimals === undefined ? 6 : opt.decimals;
+    const delimiter = opt.delimiter || ',';
+    const transform = opt.transform;
+    if (!field || !field.values || !field.values.length) return '';
+
+    const xs = [];
+    for (let gx = 0; gx < field.width; gx++) {
+      const c = gridCellCoordinate(field, gx, 0, transform);
+      xs.push(c ? c.x : NaN);
+    }
+    const rows = [];
+    rows.push([opt.cornerLabel || ''].concat(xs.map((v) => fmt(v, decimals))));
+    for (let gy = 0; gy < field.height; gy++) {
+      const c = gridCellCoordinate(field, 0, gy, transform);
+      const row = [c ? fmt(c.y, decimals) : ''];
+      for (let gx = 0; gx < field.width; gx++) {
+        row.push(fmt(field.values[gy * field.width + gx], decimals));
+      }
+      rows.push(row);
+    }
+    return rows.map((r) => r.join(delimiter)).join('\r\n');
+  }
+
+  /** The field as a long table: one row per cell with X, Y and the value. */
+  function toGridLongCSV(field, options) {
+    const opt = options || {};
+    const decimals = opt.decimals === undefined ? 6 : opt.decimals;
+    const delimiter = opt.delimiter || ',';
+    const transform = opt.transform;
+    if (!field || !field.values || !field.values.length) return '';
+
+    const rows = [];
+    rows.push(['X', 'Y', opt.valueName || 'Value'].join(delimiter));
+    for (let gy = 0; gy < field.height; gy++) {
+      for (let gx = 0; gx < field.width; gx++) {
+        const v = field.values[gy * field.width + gx];
+        if (!isFinite(v)) continue;
+        const c = gridCellCoordinate(field, gx, gy, transform);
+        if (!c) continue;
+        rows.push([fmt(c.x, decimals), fmt(c.y, decimals), fmt(v, decimals)].join(delimiter));
+      }
+    }
+    return rows.join('\r\n');
+  }
+
   const EXPORTERS = {
     [Formats.CSV]: toCSV,
     [Formats.TXT]: toTXT,
@@ -504,6 +575,8 @@ ${body}
     toSVG,
     toDXF,
     toEPS,
+    toGridCSV,
+    toGridLongCSV,
     logicalBounds
   };
 })(typeof window !== 'undefined' ? window : globalThis);

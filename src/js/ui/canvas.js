@@ -37,6 +37,9 @@
     let activeSeries = 0;
     let areaRegion = null;
     let areaOptions = null;
+    let barRegion = null;      // the colour bar of a contour map
+    let barAnchors = [];       // the known values along the bar
+    let barOrientation = 'vertical';
     let calibMode = null;        // { key, stage }
     let hoverPoint = -1;
     /*
@@ -200,6 +203,7 @@
       }
 
       renderArea(size);
+      renderBar();
       ctx.restore();
 
       renderCalibOverlay(size);
@@ -245,6 +249,43 @@
       ctx.lineTo(p3.x, p3.y);
       ctx.closePath();
       ctx.stroke();
+      ctx.restore();
+    }
+
+    /**
+     * The colour bar of a contour map. The frame shows what was picked and
+     * the small marks show where the known values sit, so a wrong reading is
+     * visible at once instead of only in the exported numbers.
+     */
+    function renderBar() {
+      if (!barRegion) return;
+      const t = theme();
+      ctx.save();
+      ctx.lineWidth = 2 / view.zoom;
+      ctx.strokeStyle = t.accent;
+      const x = barRegion.x;
+      const y = barRegion.y;
+      const w = barRegion.w;
+      const h = barRegion.h;
+      ctx.strokeRect(x, y, w, h);
+      ctx.lineWidth = 1.5 / view.zoom;
+      ctx.strokeStyle = t.warn;
+      for (const a of barAnchors) {
+        if (!a || !isFinite(a.t)) continue;
+        if (barOrientation === 'horizontal') {
+          const ax = x + a.t * w;
+          ctx.beginPath();
+          ctx.moveTo(ax, y - 6 / view.zoom);
+          ctx.lineTo(ax, y + h + 6 / view.zoom);
+          ctx.stroke();
+        } else {
+          const ay = y + (1 - a.t) * h;
+          ctx.beginPath();
+          ctx.moveTo(x - 6 / view.zoom, ay);
+          ctx.lineTo(x + w + 6 / view.zoom, ay);
+          ctx.stroke();
+        }
+      }
       ctx.restore();
     }
 
@@ -614,6 +655,12 @@
       setArea(region, options) {
         areaRegion = region;
         areaOptions = options;
+        render();
+      },
+      setBar(region, anchors, orientation) {
+        barRegion = region;
+        barAnchors = anchors || [];
+        barOrientation = orientation === 'horizontal' ? 'horizontal' : 'vertical';
         render();
       },
       getView() {

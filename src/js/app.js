@@ -82,7 +82,20 @@
     // export
     exportFormat: document.getElementById('export-format'),
     exportDelimiter: document.getElementById('export-delimiter'),
-    exportDecimals: document.getElementById('export-decimals')
+    exportDecimals: document.getElementById('export-decimals'),
+
+    // colour map workspace
+    gridState: document.getElementById('grid-state'),
+    cloudBarInfo: document.getElementById('cloud-bar-info'),
+    cloudAnchors: document.getElementById('cloud-anchors'),
+    cloudOrientation: document.getElementById('cloud-orientation'),
+    cloudScale: document.getElementById('cloud-scale'),
+    cloudStep: document.getElementById('cloud-step'),
+    cloudRegion: document.getElementById('cloud-region'),
+    cloudSummary: document.getElementById('cloud-summary'),
+    cloudPreview: document.getElementById('cloud-preview'),
+    cloudFormat: document.getElementById('cloud-format'),
+    cloudCalibrated: document.getElementById('cloud-calibrated')
   };
 
   // ------------------------------------------------------------------ state
@@ -95,6 +108,17 @@
   let areaDrag = null;       // { start, current }
   let maskTimer = null;
   let view = null;
+  /*
+   * The colour map workspace keeps its result out of the store: the field
+   * holds one number per cell and would blow up the undo snapshots, which
+   * are serialised as JSON. The calibration of the bar stays in the store,
+   * so the field can always be rebuilt from it.
+   */
+  let gridField = null;      // the extracted field
+  let gridMap = null;        // the colour -> value lookup
+  let gridPick = false;      // the next drag frames the colour bar
+  let gridDrag = null;       // { start, current }
+  let llmReadBarOverride = null;   // only the test suite sets this
 
   const canvasView = GD.createCanvasView(el.canvas, {
     tool: 'select',
@@ -209,6 +233,16 @@
       '</div>' +
       '<p class="hint">' + escapeHtml(t('settings.themeHint')) + '</p>' +
       '</div>' +
+      '<div class="settings-block">' +
+      '<div class="settings-label">' + escapeHtml(t('settings.aiKey')) + '</div>' +
+      '<div class="settings-row">' +
+      '<input type="password" id="llm-key" class="grow" placeholder="sk-..." autocomplete="off" />' +
+      '<button class="ghost small" id="llm-key-save">' + escapeHtml(t('action.save')) + '</button>' +
+      '<button class="ghost small" id="llm-key-forget">' + escapeHtml(t('action.forget')) + '</button>' +
+      '</div>' +
+      '<p class="hint" id="llm-key-state"></p>' +
+      '<p class="hint">' + escapeHtml(t('settings.aiKeyHint')) + '</p>' +
+      '</div>' +
       '<p class="hint">' + escapeHtml(t('settings.applyNow')) + '</p>';
 
     el.modalBody.querySelectorAll('input[name="set-lang"]').forEach((radio) => {
@@ -220,6 +254,39 @@
     el.modalBody.querySelectorAll('input[name="set-theme"]').forEach((radio) => {
       radio.addEventListener('change', () => setTheme(radio.value));
     });
+
+    const keyInput = el.modalBody.querySelector('#llm-key');
+    const keyState = el.modalBody.querySelector('#llm-key-state');
+    const refreshKeyState = async () => {
+      if (!window.gd || !window.gd.llmStatus) {
+        keyState.textContent = t('settings.aiUnavailable');
+        return;
+      }
+      const status = await window.gd.llmStatus();
+      keyState.textContent = status && status.configured
+        ? t('settings.aiReady', { model: status.model })
+        : t('settings.aiMissing');
+    };
+    el.modalBody.querySelector('#llm-key-save').addEventListener('click', async () => {
+      const key = (keyInput.value || '').trim();
+      if (!key) return;
+      const res = await window.gd.llmSaveKey(key);
+      keyInput.value = '';
+      if (res && res.ok) {
+        await refreshKeyState();
+        toast(t('settings.aiSaved'), 'ok');
+      } else {
+        toast(res && res.error ? res.error : t('settings.aiSaveFailed'), 'error');
+      }
+    });
+    el.modalBody.querySelector('#llm-key-forget').addEventListener('click', async () => {
+      await window.gd.llmForgetKey();
+      keyInput.value = '';
+      await refreshKeyState();
+      toast(t('settings.aiForgotten'), 'ok');
+    });
+    refreshKeyState();
+
     el.modalBackdrop.hidden = false;
   }
 
@@ -639,6 +706,17 @@
   }
 
   function handleDrag(payload) {
+    // The colour bar of a contour map is framed with its own gesture, so it
+    // is handled before the area tool takes over.
+    if (gridPick) {
+      gridDrag = { start: payload.origin, current: payload.image };
+      canvasView.setBar(
+        rectFromPoints(gridDrag.start, gridDrag.current),
+        barAnchors(),
+        store.state.grid.orientation
+      );
+      return;
+    }
     if (store.state.ui.tool !== 'area') return;
     areaDrag = { start: payload.origin, current: payload.image };
     drawAreaPreview();
@@ -662,6 +740,18 @@
   }
 
   function handleDragEnd(payload) {
+    if (gridPick) {
+      const rect = gridDrag ? rectFromPoints(gridDrag.start, payload.image) : null;
+      stopColorBarPick();
+      if (!rect || rect.w < 2 || rect.h < 2) {
+        canvasView.setBar(null, [], store.state.grid.orientation);
+        return;
+      }
+      store.setIn('grid', { bar: rect, anchors: defaultAnchors() });
+      renderCloudPanel();
+      toast(t('cloud.barFramed'), 'ok');
+      return;
+    }
     if (store.state.ui.tool !== 'area' || !areaDrag) return;
     const rect = rectFromDrag(areaDrag.start, payload.image, store.state.area.rotation);
     areaDrag = null;
@@ -813,12 +903,25 @@
         region: null
       },
       series: [{ id: 'series-' + Date.now().toString(36), name: 'Series 1', color: null, points: [] }],
-      activeSeries: 0
+      activeSeries: 0,
+      grid: {
+        bar: null,
+        orientation: store.state.grid.orientation,
+        anchors: [],
+        scale: store.state.grid.scale,
+        step: store.state.grid.step,
+        region: null,
+        useCalibration: store.state.grid.useCalibration
+      }
     });
+    gridField = null;
+    gridMap = null;
     buildCalibration();
     renderSeriesTabs();
     renderTable();
+    renderCloudPanel();
     canvasView.setArea(null, areaOptions());
+    canvasView.setBar(null, [], store.state.grid.orientation);
   }
 
   function loadImageFromDataURL(dataURL, name, path) {
@@ -925,6 +1028,456 @@
     toast(t('msg.copied'), 'ok');
   }
 
+  // ------------------------------------------------------------------ colour map
+
+  /** The rectangle between two points, in image pixels. */
+  function rectFromPoints(a, b) {
+    const x = Math.min(a.x, b.x);
+    const y = Math.min(a.y, b.y);
+    return { x: x, y: y, w: Math.abs(b.x - a.x), h: Math.abs(b.y - a.y) };
+  }
+
+  /** The anchors that carry a usable value. */
+  function usableAnchors(anchors) {
+    return (anchors || []).filter((a) => a && isFinite(a.t) && isFinite(a.value));
+  }
+
+  /** A fresh pair of anchors for a bar that was just framed. */
+  function defaultAnchors() {
+    return [
+      { t: 0, value: 0, label: '' },
+      { t: 1, value: 100, label: '' }
+    ];
+  }
+
+  /** Enter the mode in which the next drag frames the colour bar. */
+  function pickColorBar() {
+    if (!image) {
+      toast(t('cloud.noImage'), 'error');
+      return;
+    }
+    gridPick = true;
+    gridDrag = null;
+    el.stage.className = 'stage tool-cloud';
+    toast(t('cloud.pickHint'), 'info');
+  }
+
+  function stopColorBarPick() {
+    gridPick = false;
+    gridDrag = null;
+    el.stage.className = 'stage tool-' + store.state.ui.tool;
+  }
+
+  /** The anchors as they are drawn on the bar. */
+  function barAnchors() {
+    return usableAnchors(store.state.grid.anchors);
+  }
+
+  function updateBarOverlay() {
+    const g = store.state.grid;
+    canvasView.setBar(g.bar, barAnchors(), g.orientation);
+  }
+
+  /** Draw the anchors of the colour bar as an editable table. */
+  function renderCloudAnchors() {
+    const host = el.cloudAnchors;
+    if (!host) return;
+    const g = store.state.grid;
+    host.innerHTML = '';
+    if (!g.anchors.length) {
+      const p = document.createElement('p');
+      p.className = 'hint';
+      p.textContent = t('cloud.noTicks');
+      host.appendChild(p);
+      return;
+    }
+    g.anchors.forEach((a, i) => {
+      const row = document.createElement('div');
+      row.className = 'cloud-anchor';
+
+      const value = document.createElement('input');
+      value.type = 'number';
+      value.step = 'any';
+      value.className = 'cloud-value';
+      value.value = isFinite(a.value) ? String(a.value) : '';
+      value.placeholder = a.label || t('cloud.valuePlaceholder');
+      value.title = a.label || '';
+      value.addEventListener('input', () => {
+        const v = value.value === '' ? null : Number(value.value);
+        const next = store.state.grid.anchors.map((x, j) => (j === i ? Object.assign({}, x, { value: v }) : x));
+        store.setIn('grid', { anchors: next });
+        updateCloudResult();
+      });
+
+      const pos = document.createElement('input');
+      pos.type = 'number';
+      pos.step = '0.001';
+      pos.min = '0';
+      pos.max = '1';
+      pos.className = 'cloud-pos';
+      pos.value = isFinite(a.t) ? String(Number(a.t.toFixed(4))) : '';
+      pos.title = t('cloud.position');
+      pos.addEventListener('input', () => {
+        const v = pos.value === '' ? NaN : Number(pos.value);
+        const next = store.state.grid.anchors.map((x, j) => (j === i ? Object.assign({}, x, { t: v }) : x));
+        store.setIn('grid', { anchors: next });
+        updateBarOverlay();
+      });
+
+      const del = document.createElement('button');
+      del.className = 'ghost small';
+      del.type = 'button';
+      del.textContent = '×';
+      del.title = t('cloud.removeTick');
+      del.addEventListener('click', () => {
+        const next = store.state.grid.anchors.filter((_, j) => j !== i);
+        store.setIn('grid', { anchors: next });
+        renderCloudPanel();
+      });
+
+      row.appendChild(value);
+      row.appendChild(pos);
+      row.appendChild(del);
+      host.appendChild(row);
+    });
+  }
+
+  /** Repaint everything that depends on the anchors or on the field. */
+  function updateCloudResult() {
+    updateBarOverlay();
+    renderGridPreview();
+    renderCloudSummary();
+  }
+
+  function renderCloudSummary() {
+    const host = el.cloudSummary;
+    if (!host) return;
+    if (!gridField) {
+      host.textContent = '';
+      return;
+    }
+    const f = gridField;
+    const cells = f.width * f.height;
+    const coverage = cells ? Math.round((f.count / cells) * 100) : 0;
+    host.textContent = t('cloud.summary', {
+      n: f.count,
+      min: formatCoord(f.min),
+      max: formatCoord(f.max),
+      mean: formatCoord(f.mean),
+      coverage: coverage
+    });
+  }
+
+  /** The whole panel in the state of the store. */
+  function renderCloudPanel() {
+    const g = store.state.grid;
+    if (el.cloudOrientation) el.cloudOrientation.value = g.orientation;
+    if (el.cloudScale) el.cloudScale.value = g.scale;
+    if (el.cloudStep) el.cloudStep.value = String(g.step);
+    if (el.cloudRegion) el.cloudRegion.value = g.region ? 'custom' : 'figure';
+    if (el.cloudCalibrated) {
+      el.cloudCalibrated.checked = !!g.useCalibration;
+      el.cloudCalibrated.disabled = !(calibration && calibration.ok);
+    }
+    if (el.gridState) {
+      el.gridState.textContent = g.bar
+        ? t('cloud.stateFramed')
+        : '';
+    }
+    if (el.cloudBarInfo) {
+      el.cloudBarInfo.textContent = g.bar
+        ? t('cloud.barInfo', {
+          w: Math.round(g.bar.w),
+          h: Math.round(g.bar.h),
+          n: g.anchors.length
+        })
+        : '';
+    }
+    renderCloudAnchors();
+    updateCloudResult();
+  }
+
+  /**
+   * The colour of a value, using a viridis like ramp. The ramp is fixed so
+   * that two exports of the same field look the same.
+   */
+  const FIELD_RAMP = [
+    [0.0, [68, 1, 84]],
+    [0.25, [59, 82, 139]],
+    [0.5, [42, 120, 142]],
+    [0.75, [34, 168, 132]],
+    [1.0, [253, 231, 37]]
+  ];
+
+  function fieldColor(value, min, max) {
+    if (!isFinite(value)) return [0, 0, 0, 0];
+    let f = 0;
+    if (isFinite(min) && isFinite(max) && max > min) f = (value - min) / (max - min);
+    f = Math.max(0, Math.min(1, f));
+    for (let i = 1; i < FIELD_RAMP.length; i++) {
+      if (f > FIELD_RAMP[i][0] && i < FIELD_RAMP.length - 1) continue;
+      const a = FIELD_RAMP[i - 1];
+      const b = FIELD_RAMP[i];
+      const span = b[0] - a[0];
+      const k = span === 0 ? 0 : (f - a[0]) / span;
+      const kk = Math.max(0, Math.min(1, k));
+      return [
+        Math.round(a[1][0] + (b[1][0] - a[1][0]) * kk),
+        Math.round(a[1][1] + (b[1][1] - a[1][1]) * kk),
+        Math.round(a[1][2] + (b[1][2] - a[1][2]) * kk),
+        255
+      ];
+    }
+    return [0, 0, 0, 255];
+  }
+
+  /** The field as a canvas, one pixel per cell. */
+  function renderFieldCanvas(field) {
+    const canvas = document.createElement('canvas');
+    canvas.width = field.width;
+    canvas.height = field.height;
+    const ctx = canvas.getContext('2d');
+    const img = ctx.createImageData(field.width, field.height);
+    for (let i = 0; i < field.values.length; i++) {
+      const v = field.values[i];
+      if (!isFinite(v)) continue;
+      const c = fieldColor(v, field.min, field.max);
+      img.data[i * 4] = c[0];
+      img.data[i * 4 + 1] = c[1];
+      img.data[i * 4 + 2] = c[2];
+      img.data[i * 4 + 3] = 255;
+    }
+    ctx.putImageData(img, 0, 0);
+    return canvas;
+  }
+
+  /** The preview inside the panel. */
+  function renderGridPreview() {
+    const canvas = el.cloudPreview;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (!gridField) return;
+    const src = renderFieldCanvas(gridField);
+    const scale = Math.min(canvas.width / src.width, canvas.height / src.height);
+    const w = src.width * scale;
+    const h = src.height * scale;
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(src, (canvas.width - w) / 2, (canvas.height - h) / 2, w, h);
+  }
+
+  /** Run the extraction over the figure. */
+  function extractCloudField() {
+    const g = store.state.grid;
+    if (!image) {
+      toast(t('cloud.noImage'), 'error');
+      return;
+    }
+    if (!g.bar) {
+      toast(t('cloud.noBar'), 'error');
+      return;
+    }
+    const anchors = usableAnchors(g.anchors);
+    if (anchors.length < 2) {
+      toast(t('cloud.needAnchors'), 'error');
+      return;
+    }
+    const scan = GD.ColorBar.scanBar(image.imageData, g.bar, { orientation: g.orientation });
+    if (!scan.ok) {
+      toast(scan.reason || t('cloud.noBar'), 'error');
+      return;
+    }
+    const map = GD.ColorBar.buildMap({
+      samples: scan.samples,
+      anchors: anchors,
+      scale: g.scale
+    }, {});
+    if (!map.ok) {
+      toast(map.reason || t('cloud.needAnchors'), 'error');
+      return;
+    }
+    const region = g.region || { x: 0, y: 0, w: image.width, h: image.height };
+    const field = GD.ColorBar.extractField(image.imageData, map, {
+      region: region,
+      exclude: g.bar ? [g.bar] : [],
+      step: g.step
+    });
+    gridMap = map;
+    gridField = field;
+    renderCloudPanel();
+    if (!field.count) {
+      toast(t('cloud.nothingFound'), 'error');
+      return;
+    }
+    toast(t('cloud.extracted', { n: field.count }), 'ok');
+  }
+
+  /** A crop of the colour bar with its tick labels, for the vision model. */
+  function cropColorBar(rect, orientation) {
+    const src = image.canvas;
+    const canvas = document.createElement('canvas');
+    let x0;
+    let y0;
+    let w;
+    let h;
+    if (orientation === 'horizontal') {
+      const pad = Math.round(rect.h * 2.2);
+      x0 = rect.x;
+      y0 = Math.max(0, rect.y - pad);
+      w = rect.w;
+      h = Math.min(src.height - y0, rect.h + pad * 2);
+    } else {
+      const pad = Math.round(rect.w * 2.2);
+      x0 = Math.max(0, rect.x - pad);
+      y0 = rect.y;
+      w = Math.min(src.width - x0, rect.w + pad * 2);
+      h = rect.h;
+    }
+    canvas.width = Math.max(1, Math.round(w));
+    canvas.height = Math.max(1, Math.round(h));
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(src, Math.round(x0), Math.round(y0), Math.round(w), Math.round(h),
+      0, 0, canvas.width, canvas.height);
+    return {
+      dataURL: canvas.toDataURL('image/png'),
+      width: canvas.width,
+      height: canvas.height,
+      offsetX: Math.round(x0),
+      offsetY: Math.round(y0)
+    };
+  }
+
+  /**
+   * Read the tick labels with the vision model. The test suite can replace
+   * the call, so the path is covered without a network round trip.
+   */
+  async function callLlmReadBar(payload) {
+    if (llmReadBarOverride) return llmReadBarOverride(payload);
+    if (window.gd && window.gd.llmReadColorBar) return window.gd.llmReadColorBar(payload);
+    return null;
+  }
+
+  /** Let the vision model read the tick labels off the colour bar. */
+  async function aiReadColorTicks() {
+    const g = store.state.grid;
+    if (!image) {
+      toast(t('cloud.noImage'), 'error');
+      return;
+    }
+    if (!g.bar) {
+      toast(t('cloud.noBar'), 'error');
+      return;
+    }
+    if (!llmReadBarOverride && window.gd && window.gd.llmStatus) {
+      const status = await window.gd.llmStatus();
+      if (!status || !status.configured) {
+        toast(t('cloud.noKey'), 'error');
+        return;
+      }
+    }
+    const crop = cropColorBar(g.bar, g.orientation);
+    let res;
+    try {
+      res = await callLlmReadBar({
+        image: crop.dataURL,
+        width: crop.width,
+        height: crop.height,
+        offsetX: crop.offsetX,
+        offsetY: crop.offsetY,
+        orientation: g.orientation
+      });
+    } catch (err) {
+      toast(String(err && err.message ? err.message : err), 'error');
+      return;
+    }
+    if (!res || !res.ok) {
+      toast(res && res.error ? res.error : t('cloud.aiFailed'), 'error');
+      return;
+    }
+    const ticks = res.ticks || [];
+    if (!ticks.length) {
+      toast(t('cloud.aiNoTicks'), 'error');
+      return;
+    }
+    const anchors = [];
+    for (const tick of ticks) {
+      if (!isFinite(tick.position)) continue;
+      const original = g.orientation === 'horizontal'
+        ? crop.offsetX + tick.position
+        : crop.offsetY + tick.position;
+      const t = g.orientation === 'horizontal'
+        ? (original - g.bar.x) / g.bar.w
+        : 1 - (original - g.bar.y) / g.bar.h;
+      if (!isFinite(t)) continue;
+      anchors.push({
+        t: Math.max(0, Math.min(1, t)),
+        value: isFinite(tick.value) ? tick.value : null,
+        label: tick.label || ''
+      });
+    }
+    if (!anchors.length) {
+      toast(t('cloud.aiNoTicks'), 'error');
+      return;
+    }
+    store.setIn('grid', { anchors: anchors });
+    renderCloudPanel();
+    const missing = anchors.filter((a) => !isFinite(a.value)).length;
+    if (missing) {
+      toast(t('cloud.aiPartial', { n: missing }), 'error');
+    } else {
+      toast(t('cloud.aiDone', { n: anchors.length }), 'ok');
+    }
+  }
+
+  /** The coordinates the grid is exported in. */
+  function gridTransform() {
+    const g = store.state.grid;
+    if (g.useCalibration && calibration && calibration.ok) {
+      return (px, py) => calibration.toLogical(px, py);
+    }
+    return null;
+  }
+
+  async function exportCloud() {
+    if (!gridField) {
+      toast(t('cloud.notExtracted'), 'error');
+      return;
+    }
+    if (!window.gd) return;
+    const base = (image ? image.name.replace(/\.[^.]+$/, '') : 'field');
+    const format = el.cloudFormat ? el.cloudFormat.value : 'grid';
+    if (format === 'png') {
+      const canvas = renderFieldCanvas(gridField);
+      const res = await window.gd.saveBinary({
+        dataURL: canvas.toDataURL('image/png'),
+        defaultPath: base + '-field.png',
+        filters: [{ name: 'PNG image', extensions: ['png'] }]
+      });
+      if (res) toast(t('msg.exported', { file: res.name }), 'ok');
+      return;
+    }
+    const decimals = Number(el.exportDecimals.value) || 6;
+    const content = format === 'long'
+      ? Exporters.toGridLongCSV(gridField, {
+        decimals: decimals,
+        delimiter: el.exportDelimiter.value === '\\t' ? '\t' : el.exportDelimiter.value,
+        transform: gridTransform(),
+        valueName: t('cloud.valueName')
+      })
+      : Exporters.toGridCSV(gridField, {
+        decimals: decimals,
+        delimiter: el.exportDelimiter.value === '\\t' ? '\t' : el.exportDelimiter.value,
+        transform: gridTransform()
+      });
+    const res = await window.gd.saveText({
+      title: t('action.export'),
+      defaultPath: base + (format === 'long' ? '-points' : '-grid') + '.csv',
+      filters: [{ name: 'CSV', extensions: ['csv'] }],
+      content: content
+    });
+    if (res) toast(t('msg.exported', { file: res.name }), 'ok');
+  }
+
   // ------------------------------------------------------------------ workspace
 
   async function saveWorkspace() {
@@ -938,7 +1491,8 @@
       trace: s.trace,
       area: s.area,
       series: s.series,
-      activeSeries: s.activeSeries
+      activeSeries: s.activeSeries,
+      grid: s.grid
     };
     if (!window.gd) return;
     const res = await window.gd.saveText({
@@ -972,13 +1526,15 @@
       trace: data.trace || store.state.trace,
       area: data.area || store.state.area,
       series: data.series && data.series.length ? data.series : store.state.series,
-      activeSeries: data.activeSeries || 0
+      activeSeries: data.activeSeries || 0,
+      grid: data.grid ? Object.assign({}, store.state.grid, data.grid) : store.state.grid
     });
     syncControlsFromState();
     buildCalibration();
     recomputeMask();
     renderSeriesTabs();
     renderTable();
+    renderCloudPanel();
 
     // A workspace only stores a link to the original figure; reload it when
     // the file is still where it was left.
@@ -1172,6 +1728,40 @@
       canvasView.setArea(store.state.area.region, areaOptions());
     });
 
+    // colour map
+    el.cloudOrientation.addEventListener('change', () => {
+      store.setIn('grid', { orientation: el.cloudOrientation.value });
+      renderCloudPanel();
+    });
+    el.cloudScale.addEventListener('change', () => {
+      store.setIn('grid', { scale: el.cloudScale.value });
+      renderCloudPanel();
+    });
+    el.cloudStep.addEventListener('change', () => {
+      const step = Math.max(1, Math.min(64, Math.round(Number(el.cloudStep.value) || 1)));
+      store.setIn('grid', { step: step });
+      el.cloudStep.value = String(step);
+    });
+    el.cloudRegion.addEventListener('change', () => {
+      if (el.cloudRegion.value === 'custom') {
+        // The frame of the area tool is reused for the area of the field.
+        const region = store.state.area.region;
+        if (region) {
+          store.setIn('grid', { region: { x: region.cx - region.hw, y: region.cy - region.hh, w: region.hw * 2, h: region.hh * 2 } });
+        } else {
+          toast(t('cloud.noArea'), 'error');
+          el.cloudRegion.value = 'figure';
+          return;
+        }
+      } else {
+        store.setIn('grid', { region: null });
+      }
+      renderCloudPanel();
+    });
+    el.cloudCalibrated.addEventListener('change', () => {
+      store.setIn('grid', { useCalibration: el.cloudCalibrated.checked });
+    });
+
     // modal
     el.modalBackdrop.addEventListener('click', (evt) => {
       const btn = evt.target.closest('[data-action]');
@@ -1226,6 +1816,23 @@
       case 'auto-detect': autoDetect(); break;
       case 'calib-reset': resetCalibration(); break;
       case 'calib-pixel': pixelCalibration(); break;
+      case 'cloud-pick-bar': pickColorBar(); break;
+      case 'cloud-add-tick': {
+        const anchors = store.state.grid.anchors.concat([{ t: 0.5, value: null, label: '' }]);
+        store.setIn('grid', { anchors: anchors });
+        renderCloudPanel();
+        break;
+      }
+      case 'cloud-ai-ticks': aiReadColorTicks(); break;
+      case 'cloud-extract': extractCloudField(); break;
+      case 'cloud-export': exportCloud(); break;
+      case 'cloud-clear': {
+        gridField = null;
+        gridMap = null;
+        store.setIn('grid', { bar: null, anchors: [], region: null });
+        renderCloudPanel();
+        break;
+      }
       case 'clear-region': {
         store.pushUndo();
         store.setIn('area', { region: null });
@@ -1559,6 +2166,11 @@
         loadImage: loadImageFromDataURL,
         calibration: () => calibration,
         maskInfo: () => maskInfo,
+        gridField: () => gridField,
+        gridMap: () => gridMap,
+        setLlmReadBar(fn) {
+          llmReadBarOverride = fn;
+        },
         recomputeMask,
         setSampling(patch) {
           store.setIn('sampling', patch);

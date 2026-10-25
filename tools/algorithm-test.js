@@ -25,11 +25,12 @@ function load(rel) {
   'src/js/core/mask.js',
   'src/js/core/trace.js',
   'src/js/core/area.js',
+  'src/js/core/colorbar.js',
   'src/js/core/exporters.js'
 ].forEach(load);
 
 const GD = globalThis.GD;
-const { Geometry, Calibration, Mask, Trace, Area, Exporters } = GD;
+const { Geometry, Calibration, Mask, Trace, Area, Exporters, ColorBar } = GD;
 
 let passed = 0;
 let failed = 0;
@@ -585,6 +586,144 @@ section('7. Four point calibration on real GetData workspaces');
   } else {
     console.log('  (skipped: fixtures not present)');
   }
+}
+
+// ---------------------------------------------------------------- 8. colour bar
+
+section('8. Colour bar calibration and field extraction');
+{
+  /** A jet like colour map: blue -> cyan -> green -> yellow -> red. */
+  function jet(t) {
+    t = Math.max(0, Math.min(1, t));
+    if (t < 0.375) return [0, Math.round(255 * (t / 0.375)), 255];
+    if (t < 0.75) return [0, 255, Math.round(255 * (1 - (t - 0.375) / 0.375))];
+    return [Math.round(255 * ((t - 0.75) / 0.25)), Math.round(255 * (1 - (t - 0.75) / 0.25)), 0];
+  }
+
+  const W = 240;
+  const H = 200;
+  const BAR = { x: 200, y: 20, w: 20, h: 160 };
+  const AREA = { x: 20, y: 20, w: 150, h: 160 };
+  const truth = (x, y) => 50 + 40 * ((x - AREA.x) / AREA.w) + 5 * Math.sin(y / 20);
+
+  const img = makeImage(W, H, (data) => {
+    for (let y = AREA.y; y < AREA.y + AREA.h; y++) {
+      for (let x = AREA.x; x < AREA.x + AREA.w; x++) {
+        const c = jet(truth(x, y) / 100);
+        px(data, W, x, y, c[0], c[1], c[2]);
+      }
+    }
+    // The colour bar carries the same map from 0 at the bottom to 100 at the top.
+    for (let y = BAR.y; y < BAR.y + BAR.h; y++) {
+      const t = 1 - (y - BAR.y) / BAR.h;
+      const c = jet(t);
+      for (let x = BAR.x; x < BAR.x + BAR.w; x++) px(data, W, x, y, c[0], c[1], c[2]);
+    }
+    // A black axis and a white margin, neither of them belongs to the map.
+    for (let x = 0; x < W; x++) px(data, W, x, 5, 0, 0, 0);
+    for (let y = 0; y < H; y++) px(data, W, 3, y, 0, 0, 0);
+  });
+
+  const scan = ColorBar.scanBar(img, BAR, {});
+  check('the colour bar is scanned row by row',
+    scan.ok && scan.samples.length > 100, scan.ok ? scan.samples.length + ' samples' : scan.reason);
+  check('the scanned samples run from the low to the high end',
+    scan.ok && scan.samples[0].t > scan.samples[scan.samples.length - 1].t,
+    scan.ok ? scan.samples[0].t.toFixed(3) + ' .. ' + scan.samples[scan.samples.length - 1].t.toFixed(3) : '');
+
+  const emptyScan = ColorBar.scanBar(img, { x: 0, y: 0, w: 4, h: 4 }, {});
+  check('a frame without a colour bar is refused', emptyScan.ok === false, emptyScan.reason);
+
+  const map = ColorBar.buildMap({ samples: scan.samples, bottom: 0, top: 100, scale: 'linear' }, {});
+  check('the colour map covers the whole range',
+    map.ok && Math.abs(map.min) < 1 && Math.abs(map.max - 100) < 1,
+    map.ok ? map.min.toFixed(2) + ' .. ' + map.max.toFixed(2) : map.reason);
+
+  const white = map.valueAt(255, 255, 255);
+  check('a colour that is not on the bar has no value', white === null, String(white));
+  const black = map.valueAt(0, 0, 0);
+  check('the black axis has no value', black === null, String(black));
+
+  const field = ColorBar.extractField(img, map, { region: AREA, exclude: [BAR], step: 1 });
+  check('the whole area of the figure is recognised',
+    field.count === AREA.w * AREA.h, field.count + ' of ' + AREA.w * AREA.h);
+
+  let worst = 0;
+  let sum = 0;
+  for (let gy = 0; gy < field.height; gy++) {
+    for (let gx = 0; gx < field.width; gx++) {
+      const v = field.values[gy * field.width + gx];
+      if (!isFinite(v)) continue;
+      const x = field.origin.x + gx;
+      const y = field.origin.y + gy;
+      const e = Math.abs(v - truth(x, y));
+      worst = Math.max(worst, e);
+      sum += e;
+    }
+  }
+  check('the recovered values match the figure', worst < 3,
+    'worst deviation ' + worst.toFixed(2) + ', mean ' + (sum / field.count).toFixed(2));
+
+  // The bar itself must never end up in the field.
+  const withBar = ColorBar.extractField(img, map, { region: { x: 0, y: 0, w: W, h: H }, exclude: [] });
+  check('the colour bar is left out of the field',
+    withBar.count < field.count + BAR.w * BAR.h + 10,
+    withBar.count + ' cells without the exclusion');
+
+  // A logarithmic bar puts the values on a log scale.
+  const logMap = ColorBar.buildMap({
+    samples: scan.samples,
+    anchors: [{ t: 0, value: 0.001 }, { t: 1, value: 1000 }],
+    scale: 'log'
+  }, {});
+  const logMid = ColorBar.valueAt([{ t: 0, value: 0.001 }, { t: 1, value: 1000 }], 0.5, 'log');
+  check('a logarithmic bar is spaced in log space',
+    logMap.ok && Math.abs(logMid - Math.sqrt(0.001 * 1000)) < 1e-9,
+    String(logMid));
+
+  // The grid writers.
+  const wide = Exporters.toGridCSV(field, { decimals: 2 });
+  const wideLines = wide.split('\r\n');
+  check('the wide grid holds one header row and one row per line',
+    wideLines.length === field.height + 1, wideLines.length + ' lines');
+  check('the wide grid holds one column per cell',
+    wideLines[0].split(',').length === field.width + 1,
+    wideLines[0].split(',').length + ' columns');
+  check('the wide grid starts with the X coordinates',
+    wideLines[0].indexOf(String(field.origin.x)) >= 0, wideLines[0].slice(0, 40));
+
+  const long = Exporters.toGridLongCSV(field, { decimals: 3 });
+  const longLines = long.split('\r\n');
+  check('the long grid holds one row per cell',
+    longLines.length === field.count + 1, longLines.length + ' lines');
+  check('the long grid has a header',
+    longLines[0] === 'X,Y,Value', longLines[0]);
+
+  // A coordinate transform moves the grid into the calibrated system.
+  const shifted = Exporters.toGridCSV(field, {
+    decimals: 2,
+    transform: (px, py) => ({ x: px * 2, y: py * 2 })
+  });
+  check('the grid can be exported in another coordinate system',
+    shifted.split('\r\n')[0].indexOf(String(field.origin.x * 2)) >= 0,
+    shifted.split('\r\n')[0].slice(0, 40));
+
+  // A cell that carries no value must not turn into a zero.
+  const holey = {
+    width: 2,
+    height: 2,
+    step: 1,
+    origin: { x: 0, y: 0 },
+    values: new Float32Array([1, NaN, 3, 4])
+  };
+  const holeyCsv = Exporters.toGridCSV(holey, { decimals: 2 });
+  const holeyRows = holeyCsv.split('\r\n');
+  check('a missing value leaves an empty cell',
+    holeyRows[1] === '0.00,1.00,' && holeyRows[2] === '1.00,3.00,4.00',
+    holeyRows[1] + ' / ' + holeyRows[2]);
+  const holeyLong = Exporters.toGridLongCSV(holey, { decimals: 2 });
+  check('the long grid skips a cell without a value',
+    holeyLong.split('\r\n').length === 4, holeyLong.split('\r\n').length + ' lines');
 }
 
 // ---------------------------------------------------------------- summary

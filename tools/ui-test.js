@@ -247,6 +247,168 @@ app.whenReady().then(async () => {
   const value = await run(`window.__gd.store.state.series[0].points[${edit.index}].x`);
   check('the edited value reached the store', isFinite(value), String(value));
 
+  // --- 5. the colour map workspace ---------------------------------------
+  // A figure with a colour bar is built in the page and loaded, so the whole
+  // path of the colour map can be driven: frame the bar, read the ticks,
+  // extract the field and look at the result.
+  await run(`(async () => {
+    const W = 240, H = 200;
+    const canvas = document.createElement('canvas');
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, W, H);
+    const jet = (t) => {
+      t = Math.max(0, Math.min(1, t));
+      if (t < 0.375) return 'rgb(0,' + Math.round(255 * (t / 0.375)) + ',255)';
+      if (t < 0.75) return 'rgb(0,255,' + Math.round(255 * (1 - (t - 0.375) / 0.375)) + ')';
+      return 'rgb(' + Math.round(255 * ((t - 0.75) / 0.25)) + ',' + Math.round(255 * (1 - (t - 0.75) / 0.25)) + ',0)';
+    };
+    for (let y = 20; y < 180; y++) {
+      for (let x = 20; x < 170; x++) {
+        const v = 50 + 40 * ((x - 20) / 150);
+        ctx.fillStyle = jet(v / 100);
+        ctx.fillRect(x, y, 1, 1);
+      }
+    }
+    for (let y = 20; y < 180; y++) {
+      ctx.fillStyle = jet(1 - (y - 20) / 160);
+      ctx.fillRect(200, y, 20, 1);
+    }
+    const url = canvas.toDataURL('image/png');
+    await window.__gd.loadImage(url, 'cloud.png', 'C:/tmp/cloud.png');
+    window.__gd.view.fit();
+  })()`);
+  await new Promise((r) => setTimeout(r, 500));
+
+  const panel = await run(`({
+    exists: !!document.querySelector('[data-panel="cloud"]'),
+    anchors: document.querySelectorAll('#cloud-anchors .cloud-anchor').length,
+    summary: document.getElementById('cloud-summary').textContent
+  })`);
+  check('the cloud map panel is there', panel.exists === true);
+  check('a fresh figure has no tick values', panel.anchors === 0, panel.anchors + ' rows');
+
+  // Frame the colour bar with a drag over the bar of the figure.
+  await run(`(() => {
+    document.querySelector('[data-action="cloud-pick-bar"]').click();
+  })()`);
+  const framed = await run(`(() => {
+    const g = window.__gd;
+    const canvas = document.getElementById('canvas');
+    const rect = canvas.getBoundingClientRect();
+    const view = g.view.getView();
+    const toClient = (x, y) => ({
+      x: rect.left + x * view.zoom + view.offsetX,
+      y: rect.top + y * view.zoom + view.offsetY
+    });
+    const send = (type, p, buttons) => {
+      canvas.dispatchEvent(new PointerEvent(type, {
+        bubbles: true, cancelable: true,
+        clientX: p.x, clientY: p.y,
+        pointerId: 1, pointerType: 'mouse', isPrimary: true,
+        button: 0, buttons: buttons
+      }));
+    };
+    const a = toClient(200, 20);
+    const b = toClient(220, 180);
+    send('pointerdown', a, 1);
+    send('pointermove', b, 1);
+    send('pointerup', b, 0);
+    return { bar: g.store.state.grid.bar, anchors: g.store.state.grid.anchors.length };
+  })()`);
+  await new Promise((r) => setTimeout(r, 300));
+
+  check('the drag framed the colour bar',
+    framed.bar && Math.abs(framed.bar.w - 20) < 3 && Math.abs(framed.bar.h - 160) < 6,
+    JSON.stringify(framed.bar));
+  check('framing the bar offers two tick values', framed.anchors === 2, framed.anchors + ' anchors');
+
+  const edited = await run(`(() => {
+    const input = document.querySelector('#cloud-anchors .cloud-anchor .cloud-value');
+    input.value = '10';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    const second = document.querySelectorAll('#cloud-anchors .cloud-anchor .cloud-value')[1];
+    second.value = '90';
+    second.dispatchEvent(new Event('input', { bubbles: true }));
+    return window.__gd.store.state.grid.anchors.map(a => a.value);
+  })()`);
+  check('a hand typed tick value reaches the store',
+    edited.length === 2 && edited[0] === 10 && edited[1] === 90, JSON.stringify(edited));
+
+  // The model reads the tick labels; the reply is mocked so the test does
+  // not need a key or a network.
+  const aiRead = await run(`(async () => {
+    const g = window.__gd;
+    g.setLlmReadBar((payload) => {
+      window.__aiPayload = payload;
+      return {
+        ok: true,
+        ticks: [
+          { label: '0', value: 0, position: payload.height },
+          { label: '50', value: 50, position: payload.height / 2 },
+          { label: '100', value: 100, position: 0 }
+        ]
+      };
+    });
+    document.querySelector('[data-action="cloud-ai-ticks"]').click();
+    await new Promise((r) => setTimeout(r, 200));
+    return {
+      anchors: g.store.state.grid.anchors.map(a => ({ t: a.t, value: a.value, label: a.label })),
+      payload: window.__aiPayload
+    };
+  })()`);
+
+  check('the model read three tick labels', aiRead.anchors.length === 3,
+    aiRead.anchors.length + ' anchors');
+  check('the read ticks land on the bar',
+    aiRead.anchors.length === 3 &&
+    Math.abs(aiRead.anchors[0].t - 0) < 0.02 &&
+    Math.abs(aiRead.anchors[1].t - 0.5) < 0.02 &&
+    Math.abs(aiRead.anchors[2].t - 1) < 0.02,
+    JSON.stringify(aiRead.anchors.map(a => a.t)));
+  check('the read ticks carry the values of the labels',
+    aiRead.anchors.map(a => a.value).join(',') === '0,50,100',
+    JSON.stringify(aiRead.anchors.map(a => a.value)));
+  check('the model got the crop of the bar',
+    aiRead.payload && aiRead.payload.image.indexOf('data:image/png') === 0 &&
+    aiRead.payload.orientation === 'vertical',
+    aiRead.payload ? aiRead.payload.width + 'x' + aiRead.payload.height : 'no payload');
+
+  await run(`(() => { window.__gd.setLlmReadBar(null); })()`);
+
+  await run(`(() => {
+    document.querySelector('[data-action="cloud-extract"]').click();
+  })()`);
+  await new Promise((r) => setTimeout(r, 600));
+
+  const extracted = await run(`(() => {
+    const summary = document.getElementById('cloud-summary').textContent;
+    const preview = document.getElementById('cloud-preview');
+    const ctx = preview.getContext('2d');
+    const d = ctx.getImageData(0, 0, preview.width, preview.height).data;
+    let painted = 0;
+    for (let i = 0; i < d.length; i += 4) if (d[i + 3] > 0) painted++;
+    return { summary: summary, painted: painted, width: preview.width, height: preview.height };
+  })()`);
+  check('the extraction reports what it found',
+    extracted.summary.indexOf('24000') >= 0,
+    extracted.summary);
+  check('the field is drawn in the preview', extracted.painted > 500,
+    extracted.painted + ' pixels');
+
+  const grid = await run(`(() => {
+    const g = window.__gd;
+    const field = g.gridField();
+    if (!field) return { lines: -1, count: 0 };
+    const csv = g.GD.Exporters.toGridCSV(field, { decimals: 2 });
+    return { lines: csv.split('\\r\\n').length, count: field.count };
+  })()`);
+  check('the grid export holds one row per line of the figure',
+    grid.lines > 100, grid.lines + ' lines');
+  check('the field holds every pixel of the figure',
+    grid.count === 24000, grid.count + ' cells');
+
   console.log('\n' + (failures ? failures + ' check(s) FAILED' : 'all interface checks passed'));
   app.exit(failures ? 1 : 0);
 });

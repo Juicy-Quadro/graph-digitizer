@@ -3,6 +3,7 @@
 const { app, BrowserWindow, Menu, dialog, ipcMain, clipboard, shell, nativeTheme, protocol } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const llm = require('./llm');
 
 const isDev = !app.isPackaged;
 
@@ -197,6 +198,62 @@ ipcMain.handle('file:saveText', async (_evt, payload) => {
   if (result.canceled || !result.filePath) return null;
   fs.writeFileSync(result.filePath, payload.content, 'utf8');
   return { path: result.filePath, name: path.basename(result.filePath) };
+});
+
+ipcMain.handle('file:saveBinary', async (_evt, payload) => {
+  try {
+    const data = payload || {};
+    if (typeof data.dataURL !== 'string' || !data.dataURL) {
+      throw new Error('The image data is missing.');
+    }
+    // Only an image data URL may be written, so the renderer cannot use this
+    // channel to store arbitrary content.
+    const match = /^data:(image\/[a-z0-9.+-]+)(;[^,]*)?;base64,([\s\S]*)$/i.exec(data.dataURL);
+    if (!match) {
+      throw new Error('The image data must be a base64 encoded image data URL.');
+    }
+    const bytes = Buffer.from(match[3], 'base64');
+    if (!bytes.length) {
+      throw new Error('The image data is empty.');
+    }
+    const filters = data.filters || [{ name: 'PNG Image', extensions: ['png'] }];
+    const result = await dialog.showSaveDialog(mainWindow, {
+      title: data.title || 'Save Image',
+      defaultPath: data.defaultPath,
+      filters: filters
+    });
+    if (result.canceled || !result.filePath) return null;
+    // The file is written exactly where the user asked for it.
+    fs.writeFileSync(result.filePath, bytes);
+    return { path: result.filePath, name: path.basename(result.filePath) };
+  } catch (err) {
+    throw new Error(String(err && err.message ? err.message : err));
+  }
+});
+
+ipcMain.handle('llm:status', () => ({
+  configured: llm.isConfigured(),
+  model: llm.DEFAULT_MODEL
+}));
+
+ipcMain.handle('llm:saveKey', (_evt, key) => llm.saveKey(key));
+
+ipcMain.handle('llm:forgetKey', () => llm.forgetKey());
+
+ipcMain.handle('llm:readColorBar', async (_evt, payload) => {
+  try {
+    return await llm.readColorBar(payload || {});
+  } catch (err) {
+    return { ok: false, error: String(err && err.message ? err.message : err), ticks: [] };
+  }
+});
+
+ipcMain.handle('llm:extractCurves', async (_evt, payload) => {
+  try {
+    return await llm.extractCurves(payload || {});
+  } catch (err) {
+    return { ok: false, error: String(err && err.message ? err.message : err), series: [] };
+  }
 });
 
 ipcMain.handle('clipboard:write', (_evt, text) => {

@@ -18,6 +18,8 @@ const electron = path.join(root, 'node_modules', 'electron', 'dist', 'electron.e
 
 const suites = [
   { name: 'algorithm', file: 'tools/algorithm-test.js', runtime: 'node' },
+  { name: 'llm', file: 'tools/llm-test.js', runtime: 'node' },
+  { name: 'cross-layer', file: 'tools/cross-check.js', runtime: 'node' },
   { name: 'theme', file: 'tools/theme-test.js', runtime: 'electron' },
   { name: 'experience', file: 'tools/experience-test.js', runtime: 'electron' },
   { name: 'smoke', file: 'tools/smoke-test.js', runtime: 'electron' },

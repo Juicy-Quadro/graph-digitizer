@@ -13,6 +13,28 @@
 | ![中文界面](screenshots/drag-zh-light.png) | ![设置](screenshots/settings-auto-auto.png) |
 | 中文界面 · 区域取点 | 设置：语言 / 主题（跟随系统） |
 
+| | |
+|---|---|
+| ![云图提取](screenshots/cloud-zh-dark.png) | |
+| 云图提取 · 框选色标后读出刻度值 | |
+
+---
+
+## v1.3.0 更新
+
+**新增：云图提取（Cloud Map）**
+
+- **按色标还原云图数值**：框选色标 → 给刻度值 → 提取出整幅图的数值场。颜色不再是颜色，而是数字
+- **刻度值两种来源**：AI 自动读（MiniMax-M3 视觉模型读刻度标签上的数字和位置）或手动填，两种可以混用，模型读不准的直接改
+- **三种导出**：网格 CSV（宽表，Excel/Origin 直接画等值线）、点表 CSV（X, Y, 数值）、数值场 PNG
+- **坐标标定与色标标定互相独立**：网格的 X/Y 可以用标定后的逻辑坐标，数值用色标
+- **API key 只存在主进程**：`safeStorage` 加密，界面层拿不到也读不回
+- 云图有自己的面板，不和折线图的数据表混在一起
+
+**回归套件扩到六套、159 项断言**，新增色标算法断言、模型解析离线断言和云图端到端断言。
+
+说明见 [`docs/CLOUD-MAP.md`](docs/CLOUD-MAP.md)。
+
 ---
 
 ## v1.2.0 更新（缺陷修复版）
@@ -49,10 +71,10 @@
 ## 快速开始 · Quick start
 
 **方式一：免安装便携版**
-下载 `GraphDigitizer-1.2.0-portable.exe`，双击即用，不写注册表、不装任何依赖。
+下载 `GraphDigitizer-1.3.0-portable.exe`，双击即用，不写注册表、不装任何依赖。
 
 **方式二：安装版**
-运行 `GraphDigitizer-1.2.0-x64.exe`，可自选安装目录，自动创建桌面与开始菜单快捷方式。
+运行 `GraphDigitizer-1.3.0-x64.exe`，可自选安装目录，自动创建桌面与开始菜单快捷方式。
 
 **方式三：从源码运行**
 
@@ -147,6 +169,42 @@ X 轴或 Y 轴选 `Logarithmic` 即为对数刻度（两个端点值都必须大
 
 ---
 
+## 云图提取 · Cloud Map
+
+折线图只有一条曲线，云图（等值线填色图）却是**一整片连续数值场**——颜色本身就是数据。所以云图有独立的 `Cloud Map` 面板和独立的导出，不跟折线图的数据表混在一起。
+
+### 三步
+
+1. **框选色标** —— 点 `Frame colour bar`，在图上拖一个矩形把色标（那条彩色竖条）圈住。方向可选竖直 / 水平。
+2. **给刻度值** —— 两种方式，任选或混用：
+   - **AI 读取**：点 `Read with AI`，视觉模型（MiniMax-M3）读出刻度标签上的数字和它所在的位置，自动填进刻度表。读错的直接改数字就行。
+   - **手填**：刻度表里每一行是「数值 + 位置」。位置 `0` 是色标低端、`1` 是高端。点 `Add` 加一行。
+3. **提取数值场** —— 点 `Extract field`。程序沿色标逐行取色，建立「颜色 → 数值」映射，再把图中每个像素查表还原成数值。
+
+面板里会给出识别到多少格、最小/最大/平均值和覆盖率，下方还有数值场的实时预览。
+
+### 导出
+
+| 格式 | 内容 |
+|---|---|
+| `Grid CSV` | 宽表：第一行是 X 坐标，每行开头是 Y 坐标，后面是数值。Excel / Origin 直接打开就能画等值线 |
+| `Points CSV` | 长表：一行一个格子，`X, Y, 数值` |
+| `Field PNG` | 数值场按值着色后的位图 |
+
+勾选 `按标定坐标导出` 后，X/Y 用的是标定后的逻辑坐标而不是像素坐标（需要先做过四点标定）。
+
+### AI 密钥
+
+点 `Read with AI` 需要 MiniMax 的 API key。在 **设置（Ctrl+,）** 里有 `AI model key` 一栏，填进去保存即可。密钥用 `safeStorage` 加密后存在主进程，**永远不会进入界面层**，应用也不联网做别的事。
+
+### 精度
+
+在合成等值线图上验证：颜色还原的数值平均误差 **0.37**，最差 1.4（约两个色带宽度）。这是颜色量化方法的固有精度——色带越宽越准。真实数据建议把 `Grid step` 调大一点再看平均值。
+
+详细说明见 [`docs/CLOUD-MAP.md`](docs/CLOUD-MAP.md)。
+
+---
+
 ## 界面说明 · Interface
 
 ```
@@ -210,11 +268,13 @@ X = interp(xminValue, xmaxValue, u)   （对数轴时在 log 空间插值）
 
 | 脚本 | 命令 | 内容 |
 |---|---|---|
-| `tools/algorithm-test.js` | `node tools/algorithm-test.js` | 标定 / 掩膜 / 追踪 / 区域取点 / 导出器，**65 项断言** |
+| `tools/algorithm-test.js` | `node tools/algorithm-test.js` | 标定 / 掩膜 / 追踪 / 区域取点 / 导出器 / 色标，**83 项断言** |
+| `tools/llm-test.js` | `node tools/llm-test.js` | 模型提示词与回复解析（离线，不联网），**34 项** |
+| `tools/cross-check.js` | `node tools/cross-check.js` | i18n 键、DOM id、IPC 通道、脚本引用的一致性 |
 | `tools/theme-test.js` | `electron tools/theme-test.js` | 跟随系统 / 固定主题 / 工具栏切换，**7 项** |
 | `tools/experience-test.js` | `electron tools/experience-test.js` | 换图重置、标定重算、掩膜开关、系列改名、空状态引导，**6 项** |
 | `tools/smoke-test.js` | `electron tools/smoke-test.js` | 真实主进程启动：`app://` 协议、CSP 拦截、测试钩子门控，**11 项** |
-| `tools/ui-test.js` | `electron tools/ui-test.js` | 指针手势阈值、画布/表格选中态同步、编辑后点击不丢失，**14 项** |
+| `tools/ui-test.js` | `electron tools/ui-test.js` | 指针手势阈值、选中态同步、编辑后点击不丢、云图全流程，**18 项** |
 
 验证数据来自 GetData Graph Digitizer 2.26 自带的样例图与 `.gdw` 工作区 —— 工作区里保存了原程序自己提取的真值坐标。
 
@@ -234,29 +294,33 @@ X = interp(xminValue, xmaxValue, u)   （对数轴时在 log 空间插值）
 electron/          主进程（窗口、原生菜单、文件对话框 IPC）
   main.js
   preload.js       contextBridge 安全桥接
+  llm.js           模型调用、密钥加密存储、提示词与解析
 src/
   index.html       界面骨架
   styles.css       主题变量与全部样式（深/浅色）
   js/
     i18n.js        en / zh-CN 词典
     state.js       状态仓库 + 撤销/重做
-    app.js         装配层：工具、快捷键、菜单、导入导出
+    app.js         装配层：工具、快捷键、菜单、导入导出、云图
     core/
       geometry.js  几何工具（简化、平滑、重采样、裁剪）
       calibrate.js 四点标定（仿射 + 对数轴）
       mask.js      曲线识别掩膜
       trace.js     自动追踪
       area.js      区域采样
-      exporters.js 八种导出格式
+      colorbar.js  色标标定与数值场提取
+      exporters.js 八种导出格式 + 网格 CSV
     ui/
       canvas.js    画布渲染与交互
       table.js     虚拟化数据表
 tools/
-  algorithm-test.js        算法测试（65 项断言）
+  algorithm-test.js        算法测试（83 项断言）
+  llm-test.js              模型提示词与解析测试（34 项）
+  cross-check.js           跨层一致性检查
   theme-test.js            主题回归
   experience-test.js       交互体验回归
   smoke-test.js            真实主进程冒烟测试
-  ui-test.js               指针手势与选中态回归
+  ui-test.js               指针手势、选中态与云图回归
   build_fixtures.py        从 GetData 样例生成真值夹具
   capture.js               自动截图
   make_icon_and_fixtures.py

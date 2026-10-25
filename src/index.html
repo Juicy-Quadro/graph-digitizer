@@ -357,6 +357,89 @@
         </div>
       </section>
 
+      <section class="panel" data-panel="cloud">
+        <h3 class="panel-title">
+          <span data-i18n="panel.cloud">Cloud Map</span>
+          <span class="panel-state" id="grid-state"></span>
+        </h3>
+        <div class="panel-body">
+          <p class="hint" data-i18n="cloud.hint">Read the numbers out of a contour map through its colour bar.</p>
+
+          <div class="row two">
+            <button class="ghost" data-action="cloud-pick-bar" data-i18n="cloud.pickBar">Frame colour bar</button>
+            <label class="field">
+              <span data-i18n="cloud.orientation">Orientation</span>
+              <select id="cloud-orientation">
+                <option value="vertical" data-i18n="cloud.orientation.vertical">Vertical</option>
+                <option value="horizontal" data-i18n="cloud.orientation.horizontal">Horizontal</option>
+              </select>
+            </label>
+          </div>
+          <p class="hint" id="cloud-bar-info"></p>
+
+          <div class="cloud-anchors-head">
+            <span data-i18n="cloud.ticks">Tick values</span>
+            <span class="row tight">
+              <button class="ghost small" data-action="cloud-add-tick" data-i18n="cloud.addTick">Add</button>
+              <button class="ghost small" data-action="cloud-ai-ticks" data-i18n="cloud.aiRead">Read with AI</button>
+            </span>
+          </div>
+          <div class="cloud-anchors-head sub">
+            <span data-i18n="cloud.valueColumn">Value</span>
+            <span data-i18n="cloud.positionColumn">Position</span>
+          </div>
+          <div id="cloud-anchors" class="cloud-anchors"></div>
+
+          <label class="field">
+            <span data-i18n="cloud.scale">Scale</span>
+            <select id="cloud-scale">
+              <option value="linear" data-i18n="cloud.scale.linear">Linear</option>
+              <option value="log" data-i18n="cloud.scale.log">Logarithmic</option>
+            </select>
+          </label>
+
+          <div class="row two">
+            <label class="field">
+              <span data-i18n="cloud.step">Grid step</span>
+              <input type="number" id="cloud-step" min="1" max="64" step="1" value="1" />
+            </label>
+            <label class="field">
+              <span data-i18n="cloud.region">Area</span>
+              <select id="cloud-region">
+                <option value="figure" data-i18n="cloud.region.figure">Whole figure</option>
+                <option value="custom" data-i18n="cloud.region.custom">Area frame</option>
+              </select>
+            </label>
+          </div>
+
+          <label class="check">
+            <input type="checkbox" id="cloud-calibrated" checked />
+            <span data-i18n="cloud.calibrated">Export in calibrated coordinates</span>
+          </label>
+
+          <button class="primary wide" data-action="cloud-extract" data-i18n="cloud.extract">Extract field</button>
+
+          <figure class="cloud-preview">
+            <canvas id="cloud-preview" width="252" height="132"></canvas>
+            <figcaption data-i18n="cloud.previewCaption">Extracted field</figcaption>
+          </figure>
+          <p class="hint" id="cloud-summary"></p>
+
+          <label class="field">
+            <span data-i18n="cloud.exportFormat">Export</span>
+            <select id="cloud-format">
+              <option value="grid" data-i18n="cloud.format.grid">Grid CSV (wide table)</option>
+              <option value="long" data-i18n="cloud.format.long">Points CSV (X, Y, value)</option>
+              <option value="png" data-i18n="cloud.format.png">Field PNG</option>
+            </select>
+          </label>
+          <div class="row two">
+            <button class="primary" data-action="cloud-export" data-i18n="action.export">Export</button>
+            <button class="ghost" data-action="cloud-clear" data-i18n="cloud.clear">Clear</button>
+          </div>
+        </div>
+      </section>
+
       <section class="panel" data-panel="export">
         <h3 class="panel-title"><span data-i18n="panel.export">Export</span></h3>
         <div class="panel-body">
@@ -456,6 +539,7 @@
 <script src="js/core/mask.js"></script>
 <script src="js/core/trace.js"></script>
 <script src="js/core/area.js"></script>
+<script src="js/core/colorbar.js"></script>
 <script src="js/core/exporters.js"></script>
 <script src="js/ui/canvas.js"></script>
 <script src="js/ui/table.js"></script>

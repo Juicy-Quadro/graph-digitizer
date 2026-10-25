@@ -13,9 +13,17 @@ contextBridge.exposeInMainWorld('gd', {
   openWorkspace: () => ipcRenderer.invoke('file:readTextOpen'),
   readBinary: (filePath) => ipcRenderer.invoke('file:readBinary', filePath),
   saveText: (payload) => ipcRenderer.invoke('file:saveText', payload),
+  saveBinary: (payload) => ipcRenderer.invoke('file:saveBinary', payload),
   writeClipboard: (text) => ipcRenderer.invoke('clipboard:write', text),
   appInfo: () => ipcRenderer.invoke('app:info'),
   openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url),
+
+  /** The model that answers the image requests; the key stays in main. */
+  llmStatus: () => ipcRenderer.invoke('llm:status'),
+  llmSaveKey: (key) => ipcRenderer.invoke('llm:saveKey', key),
+  llmForgetKey: () => ipcRenderer.invoke('llm:forgetKey'),
+  llmReadColorBar: (payload) => ipcRenderer.invoke('llm:readColorBar', payload),
+  llmExtractCurves: (payload) => ipcRenderer.invoke('llm:extractCurves', payload),
 
   /** Menu commands are forwarded to the renderer. */
   onMenuAction: (handler) => {

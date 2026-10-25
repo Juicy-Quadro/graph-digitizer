@@ -44,6 +44,20 @@
       rotation: 0,
       region: null
     },
+    /*
+     * The colour map workspace. It is kept apart from the series: a contour
+     * map carries a field of values, not a list of points, so it has its own
+     * calibration (the colour bar) and its own export.
+     */
+    grid: {
+      bar: null,             // { x, y, w, h } of the colour bar in image pixels
+      orientation: 'vertical',
+      anchors: [],           // [{ t, value }] the known values along the bar
+      scale: 'linear',       // 'linear' or 'log'
+      step: 1,               // read every n-th pixel
+      region: null,          // { x, y, w, h } the part of the figure to read
+      useCalibration: true   // export the grid in calibrated coordinates
+    },
     series: [],
     activeSeries: 0,
     view: { zoom: 1, offsetX: 0, offsetY: 0 },
