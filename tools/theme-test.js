@@ -3,14 +3,15 @@
 /*
  * Verifies that the theme really follows the operating system.
  *
- * Electron's nativeTheme lets the test pretend that the system is in dark or
- * light mode; the renderer has to react to the change on its own.
+ * The real main process is loaded, so the window is the one that ships and
+ * the theme reaches the renderer over the same native notification the
+ * application uses. Electron's nativeTheme lets the test pretend that the
+ * system is in dark or light mode.
  */
 
-const { app, nativeTheme, session } = require('electron');
+const { app, nativeTheme, BrowserWindow } = require('electron');
 const path = require('path');
 const os = require('os');
-const { createTestWindow } = require('./lib/test-window');
 
 const root = path.join(__dirname, '..');
 let failures = 0;
@@ -19,6 +20,10 @@ let failures = 0;
 // behind in local storage.
 app.setPath('userData', path.join(os.tmpdir(), 'gd-theme-test-' + Date.now()));
 
+// The renderer only exposes its automation hook when this switch is set.
+process.env.GD_TEST_HOOK = '1';
+require(path.join(root, 'electron', 'main.js'));
+
 function check(name, ok, detail) {
   console.log((ok ? '  ok   ' : '  FAIL ') + name + (detail ? '  (' + detail + ')' : ''));
   if (!ok) failures++;
@@ -26,13 +31,34 @@ function check(name, ok, detail) {
 
 app.disableHardwareAcceleration();
 
+/** Polls until the predicate holds, so a slow machine cannot fail the test. */
+async function waitFor(label, predicate, timeout) {
+  const deadline = Date.now() + (timeout || 6000);
+  let last = null;
+  while (Date.now() < deadline) {
+    last = await predicate();
+    if (last) return last;
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  console.log('  timed out while waiting for ' + label);
+  return null;
+}
+
 app.whenReady().then(async () => {
   nativeTheme.themeSource = 'dark';
 
-  const win = createTestWindow({ root, width: 1200, height: 800 });
-
-  await session.defaultSession.clearStorageData();
-  await new Promise((r) => setTimeout(r, 1400));
+  // The main process opens the window; the DevTools window is not part of
+  // the application, so the window is picked by its address.
+  const win = await waitFor('the application window', async () => {
+    const all = BrowserWindow.getAllWindows();
+    return all.find((w) => w.webContents.getURL().indexOf('app://gd/') === 0) || null;
+  });
+  if (!win) {
+    console.log('  the application window never appeared');
+    app.exit(1);
+    return;
+  }
+  await new Promise((r) => setTimeout(r, 1200));
 
   const read = () => win.webContents.executeJavaScript(`({
     preference: window.__gd.store.state.ui.theme,
@@ -41,7 +67,11 @@ app.whenReady().then(async () => {
     buttonMode: document.querySelector('[data-action="toggle-theme"]').getAttribute('data-theme-mode')
   })`);
 
-  let s = await read();
+  let s = await waitFor('the dark theme', async () => {
+    const st = await read();
+    return st.applied === 'dark' ? st : null;
+  });
+  s = s || (await read());
   console.log('  system=dark  -> ' + JSON.stringify(s));
   check('default preference follows the system', s.preference === 'auto', s.preference);
   check('dark system applies the dark theme', s.applied === 'dark', s.applied);
@@ -53,8 +83,11 @@ app.whenReady().then(async () => {
     `window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => window.__probe.push(e.matches));` +
     `'ok'`);
   nativeTheme.themeSource = 'light';
-  await new Promise((r) => setTimeout(r, 1800));
-  s = await read();
+  s = await waitFor('the light theme', async () => {
+    const st = await read();
+    return st.applied === 'light' ? st : null;
+  });
+  s = s || (await read());
   const probe = await win.webContents.executeJavaScript(
     `({ probe: window.__probe, last: window.__gd.lastSystemTheme() })`);
   console.log('  system=light -> ' + JSON.stringify(s) + ' probe=' + JSON.stringify(probe) +
@@ -65,7 +98,7 @@ app.whenReady().then(async () => {
   // Pin the theme: the system must no longer win.
   await win.webContents.executeJavaScript(`window.__gd.setTheme('dark'); 'ok'`);
   nativeTheme.themeSource = 'light';
-  await new Promise((r) => setTimeout(r, 600));
+  await new Promise((r) => setTimeout(r, 800));
   s = await read();
   console.log('  pinned=dark, system=light -> ' + JSON.stringify(s));
   check('a pinned theme ignores the system', s.applied === 'dark', s.applied);
@@ -75,7 +108,7 @@ app.whenReady().then(async () => {
   for (let i = 0; i < 3; i++) {
     await win.webContents.executeJavaScript(
       `document.querySelector('[data-action="toggle-theme"]').click(); 'ok'`);
-    await new Promise((r) => setTimeout(r, 150));
+    await new Promise((r) => setTimeout(r, 250));
     const st = await read();
     cycle.push(st.preference + '=' + st.applied + '/' + st.buttonMode);
   }
