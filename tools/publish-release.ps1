@@ -66,6 +66,9 @@ table of the curves.
   from the bar.
 - Colours that are not on the bar - axes, labels, the background - are
   recognised as such and left out on their own.
+- **The model can read the curves of a figure too.** `Extract curves with AI`
+  sits next to `Auto Detect` and adds what the model found as a new series,
+  through the same channel and with the same key as the colour bar reader.
 
 **How the numbers are recovered**
 
@@ -122,7 +125,7 @@ below 1e-13 px.
 
 ### Regression suites
 
-Seven executable suites, 159 assertions in total:
+Seven executable suites, 162 assertions in total:
 
     node tools/run-tests.js
 
