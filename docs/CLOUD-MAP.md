@@ -144,3 +144,5 @@ node tools/run-tests.js
 | `tools/algorithm-test.js` | 第 8 节：色标的算法断言 |
 | `tools/ui-test.js` | 第 5 节：面板、框选、AI 读刻度、提取的端到端断言 |
 | `tools/llm-test.js` | 提示词与解析的离线断言（不联网） |
+| `tools/paper-test.js` | 真实论文图上的色标与数值场断言 |
+| `tools/fetch_paper_figures.py` | 取回论文原图、裁面板、量色标与标签、写真值 |
