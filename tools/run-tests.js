@@ -23,7 +23,8 @@ const suites = [
   { name: 'theme', file: 'tools/theme-test.js', runtime: 'electron' },
   { name: 'experience', file: 'tools/experience-test.js', runtime: 'electron' },
   { name: 'smoke', file: 'tools/smoke-test.js', runtime: 'electron' },
-  { name: 'ui', file: 'tools/ui-test.js', runtime: 'electron' }
+  { name: 'ui', file: 'tools/ui-test.js', runtime: 'electron' },
+  { name: 'papers', file: 'tools/paper-test.js', runtime: 'electron' }
 ];
 
 let failed = 0;

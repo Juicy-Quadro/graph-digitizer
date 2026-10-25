@@ -26,13 +26,9 @@
   const GD = root.GD || (root.GD = {});
   const G = GD.Geometry;
 
-  /** Resolution of the colour lookup grid, 5 bits per channel. */
-  const LUT_BITS = 5;
-  const LUT_SIZE = 1 << LUT_BITS;                 // 32
-  const LUT_LEVELS = 256 >> LUT_BITS;             // 8 units per step
-  const LUT_CELLS = LUT_SIZE * LUT_SIZE * LUT_SIZE;
-  /** At most this many bands take part in the lookup, so it stays fast. */
-  const MAX_LUT_SAMPLES = 256;
+  /** Resolution of the colour grid the bands are sorted into, 4 bits per channel. */
+  const GRID_BITS = 4;
+  const GRID_LEVELS = 1 << GRID_BITS;
 
   /** The dominant colour of one row of the colour bar. */
   function rowColor(data, width, height, x0, x1, y) {
@@ -171,24 +167,38 @@
    *
    * `anchors` are the known values: two of them describe a linear or a
    * logarithmic bar, more of them describe a bar with several steps.
+   *
+   * A position outside the known anchors is continued along the line of the
+   * nearest two anchors rather than held flat: the labels of a colour bar
+   * often do not reach its ends, and a flat stretch would report the same
+   * number for a whole part of the figure.
    */
   function valueAt(anchors, t, scale) {
     if (!anchors || !anchors.length) return NaN;
     const list = anchors.slice().sort((a, b) => a.t - b.t);
+    if (list.length === 1) return list[0].value;
     const log = scale === 'log';
     const toLog = (v) => (log ? Math.log(v) : v);
     const fromLog = (v) => (log ? Math.exp(v) : v);
-    if (t <= list[0].t) return list[0].value;
-    if (t >= list[list.length - 1].t) return list[list.length - 1].value;
-    for (let i = 0; i < list.length - 1; i++) {
-      const a = list[i];
-      const b = list[i + 1];
-      if (t < a.t || t > b.t) continue;
-      const span = b.t - a.t;
-      const f = span === 0 ? 0 : (t - a.t) / span;
-      return fromLog(toLog(a.value) + (toLog(b.value) - toLog(a.value)) * f);
+
+    let a = list[0];
+    let b = list[1];
+    if (t >= list[list.length - 1].t) {
+      a = list[list.length - 2];
+      b = list[list.length - 1];
+    } else if (t > list[0].t) {
+      for (let i = 0; i < list.length - 1; i++) {
+        if (t >= list[i].t && t <= list[i + 1].t) {
+          a = list[i];
+          b = list[i + 1];
+          break;
+        }
+      }
     }
-    return list[list.length - 1].value;
+    const span = b.t - a.t;
+    const f = span === 0 ? 0 : (t - a.t) / span;
+    const v = fromLog(toLog(a.value) + (toLog(b.value) - toLog(a.value)) * f);
+    return isFinite(v) ? v : NaN;
   }
 
   /**
@@ -214,6 +224,19 @@
     if (anchors.length < 2) {
       return { ok: false, reason: 'at least two known values are needed', samples: samples, anchors: anchors };
     }
+    if ((spec && spec.scale) === 'log') {
+      // A logarithmic bar cannot hold a value of zero or below.
+      for (const a of anchors) {
+        if (!(a.value > 0)) {
+          return {
+            ok: false,
+            reason: 'a logarithmic bar needs every known value to be above zero',
+            samples: samples,
+            anchors: anchors
+          };
+        }
+      }
+    }
 
     // Every sample gets the value of the bar at its own position.
     const valued = samples.map((s) => ({
@@ -222,38 +245,64 @@
       value: valueAt(anchors, s.t, (spec && spec.scale) || 'linear')
     }));
 
-    // The lookup grid holds the index of the nearest band colour. The bar
-    // is smooth, so a limited number of bands is enough to fill it and the
-    // build stays fast even for a bar with hundreds of rows.
-    const stride = Math.max(1, Math.ceil(valued.length / MAX_LUT_SAMPLES));
-    const lutSamples = [];
-    for (let i = 0; i < valued.length; i += stride) lutSamples.push(valued[i]);
+    /*
+     * The bands are sorted into a coarse colour grid so that the nearest one
+     * can be found without walking the whole list. A fixed lookup table was
+     * tried first, but its cells are far too coarse for a long colour bar:
+     * eight units of colour are more than fifty pixels of such a bar, and
+     * the value came out two percent off.
+     */
+    const cells = new Map();
+    for (let i = 0; i < valued.length; i++) {
+      const c = valued[i].color;
+      const key = gridKey(c[0], c[1], c[2]);
+      let list = cells.get(key);
+      if (!list) {
+        list = [];
+        cells.set(key, list);
+      }
+      list.push(i);
+    }
 
-    const nearest = new Int32Array(LUT_CELLS).fill(-1);
-    for (let r = 0; r < 256; r += LUT_LEVELS) {
-      for (let g = 0; g < 256; g += LUT_LEVELS) {
-        for (let b = 0; b < 256; b += LUT_LEVELS) {
-          const cell = lutIndex(r, g, b);
-          let bi = -1;
-          let bd = Infinity;
-          for (let i = 0; i < lutSamples.length; i++) {
-            const c = lutSamples[i].color;
-            const dr = r - c[0];
-            const dg = g - c[1];
-            const db = b - c[2];
-            const d = dr * dr + dg * dg + db * db;
-            if (d < bd) {
-              bd = d;
-              bi = i;
+    /**
+     * The band whose colour is the closest to the given one. The search
+     * walks outwards through the colour grid, so the answer is the exact
+     * nearest band and not an approximation of it.
+     */
+    function nearestBand(r, g, b) {
+      const br = r >> (8 - GRID_BITS);
+      const bg = g >> (8 - GRID_BITS);
+      const bb = b >> (8 - GRID_BITS);
+      for (let radius = 0; radius <= 16; radius++) {
+        let best = -1;
+        let bestDistance = Infinity;
+        for (let dr = -radius; dr <= radius; dr++) {
+          for (let dg = -radius; dg <= radius; dg++) {
+            for (let db = -radius; db <= radius; db++) {
+              if (radius > 0 &&
+                Math.max(Math.abs(dr), Math.abs(dg), Math.abs(db)) !== radius) continue;
+              const rr = br + dr;
+              const gg = bg + dg;
+              const bbl = bb + db;
+              if (rr < 0 || gg < 0 || bbl < 0 ||
+                rr >= GRID_LEVELS || gg >= GRID_LEVELS || bbl >= GRID_LEVELS) continue;
+              const list = cells.get((rr << (GRID_BITS * 2)) | (gg << GRID_BITS) | bbl);
+              if (!list) continue;
+              for (const i of list) {
+                const c = valued[i].color;
+                const d = G.colorDistance(r, g, b, c[0], c[1], c[2]);
+                if (d < bestDistance) {
+                  bestDistance = d;
+                  best = i;
+                }
+              }
             }
           }
-          nearest[cell] = bi;
         }
+        if (best >= 0) return { index: best, distance: bestDistance };
       }
+      return { index: -1, distance: Infinity };
     }
-    // The grid refers to the reduced list, so the lookup has to point back
-    // into the full one.
-    const lutToFull = lutSamples.map((s) => valued.indexOf(s));
 
     let min = Infinity;
     let max = -Infinity;
@@ -272,38 +321,33 @@
       tolerance: tolerance,
       min: isFinite(min) ? min : NaN,
       max: isFinite(max) ? max : NaN,
-      nearest: nearest,
+      bands: valued.length,
 
       /**
        * The value of a colour, or null when the colour is not part of the
        * colour map.
        */
       valueAt(r, g, b) {
-        const i = nearest[lutIndex(r, g, b)];
-        if (i < 0) return null;
-        const s = valued[lutToFull[i]];
-        if (!s) return null;
-        const d = G.colorDistance(r, g, b, s.color[0], s.color[1], s.color[2]);
-        if (d > tolerance) return null;
-        return s.value;
+        const near = nearestBand(r, g, b);
+        if (near.index < 0) return null;
+        if (near.distance > tolerance) return null;
+        return valued[near.index].value;
       },
 
       /** The distance of a colour to the colour map. */
       distance(r, g, b) {
-        const i = nearest[lutIndex(r, g, b)];
-        if (i < 0) return Infinity;
-        const s = valued[lutToFull[i]];
-        if (!s) return Infinity;
-        return G.colorDistance(r, g, b, s.color[0], s.color[1], s.color[2]);
+        const near = nearestBand(r, g, b);
+        if (near.index < 0) return Infinity;
+        return near.distance;
       }
     };
   }
 
-  /** The lookup grid index of a colour. */
-  function lutIndex(r, g, b) {
-    return ((r >> (8 - LUT_BITS)) << (LUT_BITS * 2)) |
-      ((g >> (8 - LUT_BITS)) << LUT_BITS) |
-      (b >> (8 - LUT_BITS));
+  /** The grid cell of a colour. */
+  function gridKey(r, g, b) {
+    return ((r >> (8 - GRID_BITS)) << (GRID_BITS * 2)) |
+      ((g >> (8 - GRID_BITS)) << GRID_BITS) |
+      (b >> (8 - GRID_BITS));
   }
 
   /** Two usable anchors, built from the two end values when none are given. */
@@ -401,7 +445,6 @@
     scanBar,
     buildMap,
     extractField,
-    valueAt,
-    LUT_SIZE: LUT_SIZE
+    valueAt
   };
 })(typeof window !== 'undefined' ? window : globalThis);
