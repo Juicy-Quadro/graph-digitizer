@@ -74,10 +74,10 @@
 ## 快速开始 · Quick start
 
 **方式一：免安装便携版**
-下载 `GraphDigitizer-1.3.0-portable.exe`，双击即用，不写注册表、不装任何依赖。
+下载 `GraphDigitizer-1.3.1-portable.exe`，双击即用，不写注册表、不装任何依赖。
 
 **方式二：安装版**
-运行 `GraphDigitizer-1.3.0-x64.exe`，可自选安装目录，自动创建桌面与开始菜单快捷方式。
+运行 `GraphDigitizer-1.3.1-x64.exe`，可自选安装目录，自动创建桌面与开始菜单快捷方式。
 
 **方式三：从源码运行**
 

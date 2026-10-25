@@ -38,7 +38,39 @@ $notes = @'
 
 Digitise data points out of graphs and plots in images.
 
-### What is new in 1.3.0
+### What is new in 1.3.1
+
+The colour bar of a contour map is now read more accurately. Two defects
+were found by running the extraction on the figures of real papers, and both
+are fixed.
+
+- **The colour lookup was too coarse.** It used a fixed 32 x 32 x 32 table of
+  colours, and one cell of that table is eight units of colour - more than
+  fifty pixels of a colour bar that is eighteen hundred pixels long. The
+  colour of a pixel was therefore matched to the wrong band and the number
+  came out about two percent off. The lookup now searches for the exact
+  nearest band, and the error is below one percent of the value range.
+- **The tick labels of a colour bar usually do not reach its ends.** On a
+  real figure the labels only cover the middle of the bar, and the values
+  outside the known labels were held flat, which reports the same number
+  for a whole part of the figure. They are now continued along the line of
+  the nearest two labels.
+
+Measured on four panels with a colour bar taken from arXiv 2601.00342,
+covering a jet map, a diverging map and labels that stop in the middle of
+the bar:
+
+| panel | colour map | tick labels | error |
+|---|---|---|---|
+| uv_a1 | jet | 5 / 0 / -5 (1e-1) | 0.77 percent of the range |
+| uv_a2 | jet | 5 / 0 / -5 (1e-1) | 0.77 percent of the range |
+| uv_a3 | diverging | 1 / 0 (1e-6) | 1.72 percent of the range |
+| uv_b1 | jet | -6 / -7 (1e-2) | 0.73 percent of the range |
+
+The largest error is at the flat end of a colour map, where the colour
+simply does not tell the number.
+
+### What was new in 1.3.0
 
 **Cloud map extraction**
 
@@ -73,11 +105,11 @@ table of the curves.
 **How the numbers are recovered**
 
 The colour bar is scanned row by row and the dominant colour of every row
-becomes one band. The tick values give the bands their numbers, and a
-32 x 32 x 32 lookup table turns any colour of the figure back into a number.
-On a synthetic contour map the recovered values deviate by 0.37 on average,
-with 1.4 at worst - about two band widths. That is the limit of the method:
-the wider the bands, the better.
+becomes one band. The tick values give the bands their numbers, and the
+nearest band of the figure is found for every colour. On a synthetic
+contour map the recovered values deviate by 0.37 on average, with 1.4 at
+worst - about two band widths. That is the limit of the method: the wider
+the bands, the better.
 
 ### The fixes of 1.2.0 are still in
 
@@ -125,7 +157,7 @@ below 1e-13 px.
 
 ### Regression suites
 
-Seven executable suites, 162 assertions in total:
+Eight executable suites, 179 assertions in total:
 
     node tools/run-tests.js
 
