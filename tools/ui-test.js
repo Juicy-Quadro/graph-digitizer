@@ -409,6 +409,46 @@ app.whenReady().then(async () => {
   check('the field holds every pixel of the figure',
     grid.count === 24000, grid.count + ' cells');
 
+  // --- 6. the model reads the curves of a figure -------------------------
+  const aiCurves = await run(`(async () => {
+    const g = window.__gd;
+    g.setLlmExtractCurves((payload) => ({
+      ok: true,
+      series: [{
+        name: 'Model curve',
+        color: '#ff8800',
+        points: [
+          { x: 0.1, y: 0.2 },
+          { x: 0.5, y: 0.5 },
+          { x: 0.9, y: 0.8 }
+        ]
+      }]
+    }));
+    const before = g.store.state.series.length;
+    document.querySelector('[data-action="ai-extract-curves"]').click();
+    await new Promise((r) => setTimeout(r, 300));
+    const series = g.store.state.series;
+    const last = series[series.length - 1];
+    g.setLlmExtractCurves(null);
+    return {
+      before: before,
+      after: series.length,
+      name: last ? last.name : null,
+      points: last ? last.points.length : 0,
+      px: last && last.points[0] ? last.points[0].px : null,
+      py: last && last.points[0] ? last.points[0].py : null
+    };
+  })()`);
+
+  check('the model added a series', aiCurves.after === aiCurves.before + 1,
+    aiCurves.before + ' -> ' + aiCurves.after);
+  check('the curve came back with its points',
+    aiCurves.points === 3 && aiCurves.name === 'Model curve',
+    aiCurves.name + ', ' + aiCurves.points + ' points');
+  check('the normalised points became pixel positions',
+    Math.abs(aiCurves.px - 24) < 1 && Math.abs(aiCurves.py - 40) < 1,
+    'px=' + aiCurves.px + ' py=' + aiCurves.py);
+
   console.log('\n' + (failures ? failures + ' check(s) FAILED' : 'all interface checks passed'));
   app.exit(failures ? 1 : 0);
 });

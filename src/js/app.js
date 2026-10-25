@@ -119,6 +119,7 @@
   let gridPick = false;      // the next drag frames the colour bar
   let gridDrag = null;       // { start, current }
   let llmReadBarOverride = null;   // only the test suite sets this
+  let llmCurvesOverride = null;    // only the test suite sets this
 
   const canvasView = GD.createCanvasView(el.canvas, {
     tool: 'select',
@@ -1030,6 +1031,86 @@
 
   // ------------------------------------------------------------------ colour map
 
+  /**
+   * Let the vision model read the curves of the figure.
+   *
+   * The model answers with points that are normalised to the image size, so
+   * they are turned back into pixel positions and then into logical values
+   * with the calibration the user has set.
+   */
+  async function aiExtractCurves() {
+    if (!image) {
+      toast(t('cloud.noImage'), 'error');
+      return;
+    }
+    if (!llmCurvesOverride && window.gd && window.gd.llmStatus) {
+      const status = await window.gd.llmStatus();
+      if (!status || !status.configured) {
+        toast(t('cloud.noKey'), 'error');
+        return;
+      }
+    }
+    if (!window.gd || !window.gd.llmExtractCurves) {
+      if (!llmCurvesOverride) {
+        toast(t('cloud.noAi'), 'error');
+        return;
+      }
+    }
+    toast(t('sample.aiWorking'), 'info');
+    let res;
+    try {
+      const payload = {
+        image: image.canvas.toDataURL('image/png'),
+        width: image.width,
+        height: image.height
+      };
+      res = llmCurvesOverride
+        ? await llmCurvesOverride(payload)
+        : await window.gd.llmExtractCurves(payload);
+    } catch (err) {
+      toast(String(err && err.message ? err.message : err), 'error');
+      return;
+    }
+    if (!res || !res.ok) {
+      toast(res && res.error ? res.error : t('cloud.aiFailed'), 'error');
+      return;
+    }
+    const series = res.series || [];
+    if (!series.length) {
+      toast(t('sample.aiNoCurves'), 'error');
+      return;
+    }
+    store.pushUndo();
+    let added = 0;
+    for (const line of series) {
+      const points = [];
+      for (const p of line.points || []) {
+        const px = p.x * image.width;
+        const py = p.y * image.height;
+        if (!isFinite(px) || !isFinite(py)) continue;
+        let x = px;
+        let y = py;
+        if (calibration && calibration.ok) {
+          const l = calibration.toLogical(px, py);
+          x = l.x;
+          y = l.y;
+        }
+        points.push({ x: x, y: y, px: px, py: py });
+      }
+      if (points.length < 2) continue;
+      store.addSeries(line.name || null, line.color || null);
+      store.setSeriesPoints(store.state.activeSeries, points);
+      added++;
+    }
+    renderSeriesTabs();
+    renderTable();
+    if (!added) {
+      toast(t('sample.aiNoCurves'), 'error');
+      return;
+    }
+    toast(t('sample.aiDone', { n: added }), 'ok');
+  }
+
   /** The rectangle between two points, in image pixels. */
   function rectFromPoints(a, b) {
     const x = Math.min(a.x, b.x);
@@ -1814,6 +1895,7 @@
         break;
       }
       case 'auto-detect': autoDetect(); break;
+      case 'ai-extract-curves': aiExtractCurves(); break;
       case 'calib-reset': resetCalibration(); break;
       case 'calib-pixel': pixelCalibration(); break;
       case 'cloud-pick-bar': pickColorBar(); break;
@@ -2170,6 +2252,9 @@
         gridMap: () => gridMap,
         setLlmReadBar(fn) {
           llmReadBarOverride = fn;
+        },
+        setLlmExtractCurves(fn) {
+          llmCurvesOverride = fn;
         },
         recomputeMask,
         setSampling(patch) {
