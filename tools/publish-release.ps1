@@ -38,78 +38,62 @@ $notes = @'
 
 Digitise data points out of graphs and plots in images.
 
-### What is new in 1.2.0
+### What is new in 1.3.0
 
-This is a defect fix release. An independent audit of the whole code base
-found **36 defects**; every one of them is fixed here.
+**Cloud map extraction**
 
-**The numbers were the worst**
+A contour map does not hold a curve, it holds a field of values: the colour
+of every pixel *is* the number. That is a different kind of data, so it gets
+its own panel and its own export instead of being forced into the point
+table of the curves.
 
-- **The calibration used two incompatible geometries at once.** `toLogical`
-  projected the point perpendicular onto the axis while the constant-X and
-  constant-Y lines were built as affine iso-lines. The two only agree on
-  perpendicular axes, so on a tilted figure the logical X of a curve was not
-  monotonic and the order of the data was wrong. The model is now a single
-  affine basis decomposition. On the tilted reference figure the truth values
-  are monotonic again (108 of 108 points, was 77 of 108) and the curvature of
-  the mapped curve drops by a factor of 58.
-- **Changing the calibration did not update a single digitised point.** The
-  table and all eight exports kept the old numbers while the interface showed
-  the new calibration. Every point is now recomputed from its pixel position.
-- **Opening a second figure kept the calibration and the points of the first
-  one**, so the export of file B contained the data of file A.
-- The combined mask mode counted the black axes, the grid and the labels as
-  curve; the tracer happily followed them (839 px became 155 px).
-- The tracer jumped onto an unrelated parallel structure and kept tracing it;
-  the tolerance is now measured against the walking point and the heading is
-  updated after a bridge (108 points became 49, and a 6 px gap is still
-  bridged).
-- A run that hit the point limit was silently cut short. The limit is now
-  reported and shown in the status bar.
-- Area sampling missed intersections at a coarse step, anchored the grid on
-  the left edge and returned the intersections of a vertical sampling line in
-  no particular order.
+- **Frame the colour bar** with a drag, give it its tick values, and the
+  whole figure is read back as numbers.
+- **The tick values come from two places and both work together.** A vision
+  model reads the labels off the bar and the position of each label along it;
+  every number is then editable, so a label the model got wrong or could not
+  read is simply typed in. Measured on a synthetic bar with the labels
+  100 / 75 / 50 / 25 / 0: four of the five were read with the value correct
+  and the position within 4 px of a 260 px bar.
+- **The API key stays in the main process**, encrypted with `safeStorage`.
+  The interface can never read it back, and the application does nothing else
+  with the network.
+- **Three exports**: a wide grid CSV that Excel and Origin read as a contour
+  map, a long CSV with X, Y and the value per cell, and a PNG of the field
+  coloured by value.
+- **The colour bar calibration and the axis calibration are independent.** The
+  grid can be exported in calibrated coordinates; the numbers always come
+  from the bar.
+- Colours that are not on the bar - axes, labels, the background - are
+  recognised as such and left out on their own.
 
-**The interface did what it was told**
+**How the numbers are recovered**
 
-- A click was measured in **image** pixels, so the same gesture behaved
-  differently at every zoom level: at 40x a 40 pixel drag counted as a click,
-  at 0.5x a two pixel jitter threw the click away. The threshold is now in
-  screen pixels.
-- The canvas and the data table kept their own selection. Deleting a point
-  made the canvas paint the "selected" colour onto the neighbouring point
-  while the table showed an empty selection. The table owns the selection
-  now, the canvas mirrors it per series and clamps it to the current point
-  count.
-- A cancelled pointer (the system took the gesture over) created a data point
-  out of thin air.
-- The click that ended a cell edit never reached its row.
-- The *Show detection mask* switch and the opacity slider did nothing.
-- Clicking a series tab did not repaint the canvas.
-- Renaming a series could never succeed: Electron has no `window.prompt`.
-- The native `Delete` accelerator swallowed the key inside a text field, so
-  deleting a character deleted a data point.
+The colour bar is scanned row by row and the dominant colour of every row
+becomes one band. The tick values give the bands their numbers, and a
+32 x 32 x 32 lookup table turns any colour of the figure back into a number.
+On a synthetic contour map the recovered values deviate by 0.37 on average,
+with 1.4 at worst - about two band widths. That is the limit of the method:
+the wider the bands, the better.
 
-**The application was too trusting**
+### The fixes of 1.2.0 are still in
 
-- The renderer was served from `file://`, where `script-src 'self'` matches
-  every local file. It now runs on a custom `app://` scheme, so the policy
-  really keeps the renderer inside the application. A `file://` script is
-  blocked, and it is checked in the test suite.
-- The renderer could read **any** file the main process could read through a
-  channel that had no caller at all. That channel is gone, and the remaining
-  one is limited to the folders the user opened through a native dialog.
-- The test hook that the automation uses is behind two switches and does not
-  ship in the release.
+An independent audit of the whole code base found **36 defects**; every one
+of them was fixed in 1.2.0 and none of them came back.
 
-**The exports told lies**
-
-- A missing measurement was formatted as a real `0`, and the SVG, DXF and EPS
-  writers emitted literal `NaN` coordinates, which makes the whole file
-  unreadable. Every format now either leaves the cell empty or drops the
-  point it cannot represent.
-- The header of a multi series CSV, text or spreadsheet file did not line up
-  with the data columns.
+- The calibration used two incompatible geometries at once. It is now a
+  single affine basis decomposition, so the truth values of a tilted figure
+  are monotonic again (108 of 108 points, was 77 of 108).
+- Changing the calibration recomputes every digitised point.
+- A click is measured in screen pixels, so a gesture behaves the same at
+  every zoom level.
+- The canvas and the data table share one selection, and deleting a point no
+  longer paints the "selected" colour onto its neighbour.
+- The renderer runs on a custom `app://` scheme, so the content security
+  policy really keeps it inside the application, and the renderer can no
+  longer read arbitrary files.
+- A missing measurement never turns into a zero or a NaN in any of the eight
+  export formats.
 
 ### Highlights
 
@@ -138,7 +122,7 @@ below 1e-13 px.
 
 ### Regression suites
 
-Five executable suites, 103 assertions in total:
+Seven executable suites, 159 assertions in total:
 
     node tools/run-tests.js
 
@@ -150,8 +134,8 @@ Five executable suites, 103 assertions in total:
   to run.
 
 Both packages are unsigned, so Windows SmartScreen may show a warning on the
-first run. The application is a plain local tool: it never touches the
-network.
+first run. The application is a plain local tool: it only talks to the
+network when you ask it to read a colour bar with the model.
 
 ### Requirements
 
