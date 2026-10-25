@@ -144,10 +144,31 @@
     }, 2600);
   }
 
-  function showModal(title, bodyHtml) {
+  /** Set by a modal that offers an explicit confirm action. */
+  let modalConfirm = null;
+
+  function showModal(title, bodyHtml, onReady) {
     el.modalTitle.textContent = title;
     el.modalBody.innerHTML = bodyHtml;
+    const actions = el.modalBackdrop.querySelector('.modal-actions');
+    actions.innerHTML = '';
+    modalConfirm = null;
+
+    if (onReady) {
+      const ok = document.createElement('button');
+      ok.className = 'primary';
+      ok.textContent = t('action.apply');
+      ok.setAttribute('data-action', 'modal-confirm');
+      actions.appendChild(ok);
+    }
+    const close = document.createElement('button');
+    close.className = 'ghost';
+    close.textContent = t('action.close');
+    close.setAttribute('data-action', 'modal-close');
+    actions.appendChild(close);
+
     el.modalBackdrop.hidden = false;
+    if (onReady) onReady(el.modalBody);
   }
 
   function hideModal() {
@@ -336,6 +357,27 @@
     return result;
   }
 
+  /**
+   * Re-derive the logical coordinates of every digitised point from the pixel
+   * position it was taken at. Without this the table and every export would
+   * keep showing numbers that belong to the previous calibration.
+   */
+  function recomputePointValues() {
+    if (!calibration || !calibration.ok) return false;
+    const series = store.state.series.map((line) => ({
+      ...line,
+      points: (line.points || []).map((p) => {
+        if (p.px === undefined || p.py === undefined) return p;
+        const l = calibration.toLogical(p.px, p.py);
+        return Object.assign({}, p, { x: l.x, y: l.y });
+      })
+    }));
+    store.set({ series });
+    renderSeriesTabs();
+    renderTable();
+    return true;
+  }
+
   function renderCalibPanel() {
     const s = store.state.calibration;
     el.calibRows.forEach((row) => {
@@ -387,6 +429,7 @@
     points[key] = { x: x, y: y, value: value };
     store.setIn('calibration', { points: points });
     buildCalibration();
+    recomputePointValues();
   }
 
   function defaultValueFor(key) {
@@ -400,7 +443,8 @@
     el.seriesTabs.innerHTML = '';
     s.series.forEach((line, i) => {
       const chip = document.createElement('button');
-      chip.className = 'series-chip' + (i === s.activeSeries ? ' active' : '');
+      chip.className = 'series-chip' + (i === store.state.activeSeries ? ' active' : '');
+      chip.setAttribute('data-index', String(i));
       chip.innerHTML =
         `<span class="dot" style="background:${line.color || 'currentColor'}"></span>` +
         `<span class="nm"></span>` +
@@ -411,19 +455,42 @@
         store.setActiveSeries(i);
         renderSeriesTabs();
         renderTable();
-        canvasView.setSeries(s.series, s.activeSeries);
-      });
-      chip.addEventListener('dblclick', () => {
-        const name = prompt(t('series.rename'), line.name);
-        if (name) {
-          const series = s.series.slice();
-          series[i] = Object.assign({}, series[i], { name: name });
-          store.set({ series: series });
-          renderSeriesTabs();
-        }
       });
       el.seriesTabs.appendChild(chip);
     });
+  }
+
+  /** Rename a series through the in-app dialog (Electron has no window.prompt). */
+  function renameSeries(index) {
+    const line = store.state.series[index];
+    if (!line) return;
+    showModal(t('series.rename'),
+      `<input type="text" id="series-name-input" maxlength="80" />`,
+      (body) => {
+        const input = body.querySelector('#series-name-input');
+        input.value = line.name;
+        input.focus();
+        input.select();
+        input.addEventListener('keydown', (evt) => {
+          if (evt.key === 'Enter') {
+            evt.preventDefault();
+            commitSeriesRename(index, input.value);
+            hideModal();
+          }
+        });
+        modalConfirm = () => commitSeriesRename(index, input.value);
+      });
+  }
+
+  function commitSeriesRename(index, name) {
+    const value = String(name || '').trim();
+    const line = store.state.series[index];
+    if (!line || !value || value === line.name) return;
+    store.pushUndo();
+    const series = store.state.series.slice();
+    series[index] = Object.assign({}, series[index], { name: value });
+    store.set({ series: series });
+    renderSeriesTabs();
   }
 
   function renderTable() {
@@ -676,9 +743,48 @@
 
   async function openImage() {
     if (!window.gd) return;
-    const res = await window.gd.openImage();
-    if (!res) return;
-    await loadImageFromDataURL(res.dataURL, res.name, res.path);
+    let picked = null;
+    try {
+      picked = await window.gd.openImage();
+      if (!picked) return;
+      await loadImageFromDataURL(picked.dataURL, picked.name, picked.path);
+    } catch (err) {
+      const name = picked && picked.name ? picked.name : '';
+      const message = /\.tiff?$/i.test(name)
+        ? t('msg.tiffUnsupported')
+        : (err && err.message ? err.message : String(err));
+      toast(message, 'error');
+    }
+  }
+
+  /**
+   * A new figure invalidates the calibration and every point that was
+   * digitised from the previous one - they are pixel coordinates of the old
+   * image. Clear them instead of silently exporting them under the new name.
+   */
+  function resetDigitizingState() {
+    const area = store.state.area;
+    store.set({
+      calibration: {
+        points: { xmin: null, xmax: null, ymin: null, ymax: null },
+        xScale: 'linear',
+        yScale: 'linear'
+      },
+      area: {
+        mode: area.mode,
+        spacing: area.spacing,
+        offset: area.offset,
+        placement: area.placement,
+        rotation: area.rotation,
+        region: null
+      },
+      series: [{ id: 'series-' + Date.now().toString(36), name: 'Series 1', color: null, points: [] }],
+      activeSeries: 0
+    });
+    buildCalibration();
+    renderSeriesTabs();
+    renderTable();
+    canvasView.setArea(null, areaOptions());
   }
 
   function loadImageFromDataURL(dataURL, name, path) {
@@ -702,6 +808,7 @@
         store.set({
           image: { name: image.name, width: image.width, height: image.height, path: image.path }
         });
+        resetDigitizingState();
         el.emptyState.hidden = true;
         canvasView.setImage(image);
         canvasView.fit();
@@ -901,6 +1008,14 @@
       btn.addEventListener('click', () => setLanguage(btn.getAttribute('data-lang')));
     });
 
+    // Double click a series chip to rename it. The listener lives on the
+    // stable container because the chips are re-rendered on every change.
+    el.seriesTabs.addEventListener('dblclick', (evt) => {
+      const chip = evt.target.closest('.series-chip');
+      if (!chip) return;
+      renameSeries(Number(chip.getAttribute('data-index')));
+    });
+
     // calibration values
     el.calibRows.forEach((row) => {
       const key = row.getAttribute('data-calib');
@@ -914,6 +1029,7 @@
         points[key] = Object.assign({}, points[key], { value: value });
         store.setIn('calibration', { points: points });
         buildCalibration();
+        recomputePointValues();
         renderTable();
       });
     });
@@ -921,11 +1037,13 @@
     el.calibXScale.addEventListener('change', () => {
       store.setIn('calibration', { xScale: el.calibXScale.value });
       buildCalibration();
+      recomputePointValues();
       renderTable();
     });
     el.calibYScale.addEventListener('change', () => {
       store.setIn('calibration', { yScale: el.calibYScale.value });
       buildCalibration();
+      recomputePointValues();
       renderTable();
     });
 
@@ -960,11 +1078,13 @@
     });
     el.showMask.addEventListener('change', () => {
       store.setIn('sampling', { showMask: el.showMask.checked });
+      canvasView.setMaskOptions({ showMask: el.showMask.checked });
     });
     el.maskOpacity.addEventListener('input', () => {
       const v = Number(el.maskOpacity.value);
       el.opacityValue.textContent = v + '%';
       store.setIn('sampling', { maskOpacity: v / 100 });
+      canvasView.setMaskOptions({ maskOpacity: v / 100 });
     });
 
     // trace
@@ -1010,7 +1130,24 @@
 
     // modal
     el.modalBackdrop.addEventListener('click', (evt) => {
-      if (evt.target === el.modalBackdrop || evt.target.closest('[data-action="modal-close"]')) {
+      const btn = evt.target.closest('[data-action]');
+      if (btn) {
+        const action = btn.getAttribute('data-action');
+        if (action === 'modal-close') {
+          modalConfirm = null;
+          hideModal();
+          return;
+        }
+        if (action === 'modal-confirm') {
+          const fn = modalConfirm;
+          modalConfirm = null;
+          hideModal();
+          if (fn) fn();
+          return;
+        }
+      }
+      if (evt.target === el.modalBackdrop) {
+        modalConfirm = null;
         hideModal();
       }
     });
@@ -1033,6 +1170,7 @@
         const next = !store.state.sampling.showMask;
         el.showMask.checked = next;
         store.setIn('sampling', { showMask: next });
+        canvasView.setMaskOptions({ showMask: next });
         break;
       }
       case 'toggle-theme': {
@@ -1157,6 +1295,7 @@
       }
     });
     buildCalibration();
+    recomputePointValues();
     renderTable();
   }
 
@@ -1330,6 +1469,7 @@
       setCalibration(points, xScale, yScale) {
         store.setIn('calibration', { points: points, xScale: xScale || 'linear', yScale: yScale || 'linear' });
         buildCalibration();
+        recomputePointValues();
         renderTable();
       },
       traceAt(x, y) {

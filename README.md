@@ -15,6 +15,20 @@
 
 ---
 
+## v1.1.0 更新
+
+- **界面全面重做**：统一设计 token、深浅双主题重新调校、数据表重做（数值右对齐 + 等宽数字 + 斑马纹）、空状态重做并加入**三步引导卡**
+- **掩膜开关与透明度真正生效**（此前是死控件），叠加层在深色图上也清晰可见
+- **改标定后自动重算**所有已数字化点的逻辑坐标
+- **打开新图自动清空**上一张图的标定与数据，避免导出张冠李戴
+- **系列重命名改用应用内弹窗**（Electron 不支持 `window.prompt`，此前永远失败）
+- 不再提供 TIFF（Chromium 无 TIFF 解码器），万一拖入会给出明确提示
+
+完整改动清单见 [`docs/UX-PRIORITIES.md`](docs/UX-PRIORITIES.md)，
+缺陷审计见 [`docs/AUDIT-2026-10-25.md`](docs/AUDIT-2026-10-25.md)。
+
+---
+
 ## 快速开始 · Quick start
 
 **方式一：免安装便携版**
@@ -59,7 +73,9 @@ npm start
 ## 五个步骤，把图变成数据 · The five steps
 
 ### 1. 打开图片 — Open Image
-拖放或点击 `Open Image`（Ctrl+O）。支持 PNG / JPG / BMP / GIF / TIFF / WEBP。
+拖放或点击 `Open Image`（Ctrl+O）。支持 PNG / JPG / BMP / GIF / WEBP。
+
+> TIFF 暂不支持：Electron 内置的 Chromium 没有 TIFF 解码器。与其让你选一个打不开的文件，不如现在就说清楚。
 
 ### 2. 设置标定 — Set Scale（快捷键 `S`）
 依次在图上点四个点：**Xmin → Xmax → Ymin → Ymax**，然后在右侧面板给每个点填入真实数值。

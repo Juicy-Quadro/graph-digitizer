@@ -67,15 +67,17 @@
         if (editing === index) {
           rows.push(
             `<tr class="selected"><td class="col-idx">${index + 1}</td>` +
-            `<td><input class="cell-input" data-field="x" value="${escapeAttr(p.x)}" /></td>` +
-            `<td><input class="cell-input" data-field="y" value="${escapeAttr(p.y)}" /></td>` +
+            `<td class="col-x"><input class="cell-input" data-field="x" value="${escapeAttr(p.x)}" /></td>` +
+            `<td class="col-y"><input class="cell-input" data-field="y" value="${escapeAttr(p.y)}" /></td>` +
+            `<td class="col-fill"></td>` +
             `<td class="col-act"></td></tr>`
           );
         } else {
           rows.push(
             `<tr${cls} data-index="${index}">` +
             `<td class="col-idx">${index + 1}</td>` +
-            `<td>${x}</td><td>${y}</td>` +
+            `<td class="col-x">${x}</td><td class="col-y">${y}</td>` +
+            `<td class="col-fill"></td>` +
             `<td class="col-act"><button class="row-del" data-del="${index}" title="${GD.I18n.t('table.remove')}">×</button></td>` +
             `</tr>`
           );

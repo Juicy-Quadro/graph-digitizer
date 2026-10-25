@@ -12,6 +12,14 @@
     en: {
       'app.name': 'Graph Digitizer',
       'app.tagline': 'Digitize data from graphs in images',
+      'app.openTitle': 'Open an image to begin',
+      'app.openSubtitle': 'Point it at a graph, a plot or a map and turn the curve into a data table.',
+      'qs.scaleTitle': 'Set the scale',
+      'qs.scaleBody': 'Click the four axis ends, then type the real values.',
+      'qs.pickTitle': 'Pick the curve colour',
+      'qs.pickBody': 'One click on the curve, one click on the background.',
+      'qs.digitizeTitle': 'Digitise',
+      'qs.digitizeBody': 'Auto trace a solid line, or sample a region on a grid.',
 
       'menu.file': 'File',
       'menu.edit': 'Edit',
@@ -147,6 +155,7 @@
       'status.selected': '{n} selected',
 
       'msg.imageLoaded': 'Loaded {name} ({w}×{h})',
+      'msg.tiffUnsupported': 'This build cannot read TIFF files. Convert the image to PNG or JPG first.',
       'msg.noImage': 'Open an image first.',
       'msg.calibNeeded': 'Set the scale before digitizing.',
       'msg.calibIncomplete': 'Calibration is incomplete.',
@@ -192,6 +201,14 @@
     zh: {
       'app.name': '图表数字化工具',
       'app.tagline': '从图片中的图表提取数值数据',
+      'app.openTitle': '打开一张图片开始',
+      'app.openSubtitle': '指向图表、曲线或地图，把曲线变成可用的数据表。',
+      'qs.scaleTitle': '设定标定',
+      'qs.scaleBody': '点击四个轴端点，再填入真实数值。',
+      'qs.pickTitle': '指定曲线颜色',
+      'qs.pickBody': '曲线上点一下，背景上点一下。',
+      'qs.digitizeTitle': '开始取点',
+      'qs.digitizeBody': '实线用自动追踪，任意形状用区域取点。',
 
       'menu.file': '文件',
       'menu.edit': '编辑',
@@ -327,6 +344,7 @@
       'status.selected': '已选 {n} 个',
 
       'msg.imageLoaded': '已载入 {name}（{w}×{h}）',
+      'msg.tiffUnsupported': '此版本无法读取 TIFF 文件，请先转换成 PNG 或 JPG。',
       'msg.noImage': '请先打开图片。',
       'msg.calibNeeded': '请先完成坐标标定。',
       'msg.calibIncomplete': '标定尚未完成。',

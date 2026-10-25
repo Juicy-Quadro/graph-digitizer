@@ -1,4 +1,4 @@
-﻿/*
+/*
  * Area digitizing.
  *
  * The user drags a rectangular window over the figure. Inside that window a

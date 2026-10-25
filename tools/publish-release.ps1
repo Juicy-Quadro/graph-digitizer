@@ -23,21 +23,54 @@ function Get-Sha256([string]$path) {
     (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLower()
 }
 
-$installer = Join-Path $ReleaseDir 'GraphDigitizer-1.0.0-x64.exe'
-$portable = Join-Path $ReleaseDir 'GraphDigitizer-1.0.0-portable.exe'
+$installer = Get-ChildItem -LiteralPath $ReleaseDir -Filter 'GraphDigitizer-*-x64.exe' -File |
+    Sort-Object LastWriteTime -Descending | Select-Object -First 1
+$portable = Get-ChildItem -LiteralPath $ReleaseDir -Filter 'GraphDigitizer-*-portable.exe' -File |
+    Sort-Object LastWriteTime -Descending | Select-Object -First 1
+if (-not $installer -or -not $portable) {
+    throw 'No GraphDigitizer packages found in ' + $ReleaseDir
+}
+$installer = $installer.FullName
+$portable = $portable.FullName
 
 $notes = @'
-## Graph Digitizer 1.0.0
+## Graph Digitizer __VERSION__
 
 Digitise data points out of graphs and plots in images.
 
+### What is new in 1.1.0
+
+**Interface rebuilt**
+
+- A single set of design tokens drives the whole application; the dark and
+  light themes were re-tuned together instead of drifting apart.
+- The data table was redone: right aligned numbers, tabular figures, zebra
+  rows and a compact row height.
+- The empty state now carries a three step quick start guide
+  (`S` set the scale, `L` pick the curve colour, `T` digitise).
+- The theme button shows the icon of the mode that is actually active.
+
+**Experience fixes**
+
+- The *Show detection mask* switch and the opacity slider really work now -
+  they were writing to the store while the canvas read a frozen copy.
+- The mask overlay stays readable on dark figures (it used a multiply blend
+  that turned the curve black).
+- Changing the calibration now **recomputes every digitised point** from its
+  pixel position, so the table and every export show numbers that match the
+  calibration you can see.
+- Opening a new figure clears the previous calibration and points instead of
+  exporting them under the new file name.
+- Renaming a series uses the in-app dialog (Electron has no `window.prompt`).
+- TIFF is no longer offered: Chromium cannot decode it, and a file that
+  silently fails to open is worse than a format that is honestly missing.
+
 ### Highlights
 
-- **Four point calibration** built on a general affine transform - tilted and
-  non-orthogonal axes work, and each axis can be linear or logarithmic.
+- **Four point calibration** built on a general affine transform, so tilted
+  and non-orthogonal axes work; each axis can be linear or logarithmic.
 - **Curve identification** by colour, by intensity or combined, with speck
-  filtering, thickness compensation and a live mask overlay so you can see
-  exactly what the detector picked.
+  filtering, thickness compensation and a live mask overlay.
 - **Automatic line tracing** that walks along the curve, goes straight through
   crossings, bridges the gaps of dashed curves, then smooths and resamples.
 - **Area sampling** on a grid that can be rotated and expressed in pixels or
@@ -56,9 +89,10 @@ points within 2 px, 0.80 px mean deviation**.
 
 ### Install
 
-- `GraphDigitizer-1.0.0-x64.exe` - installer, choose the install directory,
-  creates a desktop and a Start menu shortcut.
-- `GraphDigitizer-1.0.0-portable.exe` - no installation, double click to run.
+- `GraphDigitizer-__VERSION__-x64.exe` - installer, choose the install
+  directory, creates a desktop and a Start menu shortcut.
+- `GraphDigitizer-__VERSION__-portable.exe` - no installation, double click
+  to run.
 
 Both packages are unsigned, so Windows SmartScreen may show a warning on the
 first run. The application is a plain local tool: it never touches the
@@ -70,8 +104,8 @@ Windows 10 or newer, 64 bit.
 
 ### Checksums
 
-    __SHA_INSTALLER__  GraphDigitizer-1.0.0-x64.exe
-    __SHA_PORTABLE__  GraphDigitizer-1.0.0-portable.exe
+    __SHA_INSTALLER__  __INSTALLER_NAME__
+    __SHA_PORTABLE__  __PORTABLE_NAME__
 
 ### Build from source
 
@@ -81,6 +115,9 @@ Windows 10 or newer, 64 bit.
     node tools/algorithm-test.js
 '@
 
+$notes = $notes.Replace('__VERSION__', $Tag.TrimStart('v'))
+$notes = $notes.Replace('__INSTALLER_NAME__', (Split-Path $installer -Leaf))
+$notes = $notes.Replace('__PORTABLE_NAME__', (Split-Path $portable -Leaf))
 $notes = $notes.Replace('__SHA_INSTALLER__', (Get-Sha256 $installer))
 $notes = $notes.Replace('__SHA_PORTABLE__', (Get-Sha256 $portable))
 

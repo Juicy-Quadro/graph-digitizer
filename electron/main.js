@@ -63,7 +63,9 @@ ipcMain.handle('image:open', async () => {
     title: 'Open Image',
     properties: ['openFile'],
     filters: [
-      { name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'bmp', 'gif', 'tif', 'tiff', 'webp'] },
+      // Chromium has no TIFF decoder, so offering it would only produce a
+      // file that silently fails to load.
+      { name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'bmp', 'gif', 'webp'] },
       { name: 'All Files', extensions: ['*'] }
     ]
   });

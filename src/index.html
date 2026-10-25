@@ -110,18 +110,46 @@
       <canvas id="canvas"></canvas>
 
       <div class="empty-state" id="empty-state">
-        <svg viewBox="0 0 120 84" class="empty-art" aria-hidden="true">
-          <rect x="2" y="2" width="116" height="80" rx="4" fill="none" stroke="currentColor" stroke-width="1.2" opacity=".45"/>
-          <path d="M18 66V18M18 66h84" fill="none" stroke="currentColor" stroke-width="1.6" opacity=".65"/>
-          <path d="M22 58c10-2 14-26 26-26s12 18 24 16 18-20 26-18" fill="none" stroke="var(--accent)" stroke-width="2.2" stroke-linecap="round"/>
-          <circle cx="48" cy="32" r="2.6" fill="var(--accent)"/>
-          <circle cx="72" cy="48" r="2.6" fill="var(--accent)"/>
-          <circle cx="98" cy="30" r="2.6" fill="var(--accent)"/>
+        <svg viewBox="0 0 200 140" class="empty-art" aria-hidden="true">
+          <defs>
+            <linearGradient id="eg" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="currentColor" stop-opacity=".13"/>
+              <stop offset="1" stop-color="currentColor" stop-opacity="0"/>
+            </linearGradient>
+          </defs>
+          <rect x="8" y="8" width="184" height="124" rx="10" fill="url(#eg)"
+                stroke="currentColor" stroke-opacity=".26"/>
+          <path d="M30 112V28M30 112h140" stroke="currentColor" stroke-opacity=".5"
+                stroke-width="1.6" fill="none" stroke-linecap="round"/>
+          <path d="M34 96c16-2 24-46 42-46s16 34 34 32 20-34 32-30"
+                stroke="var(--accent)" stroke-width="2.6" fill="none" stroke-linecap="round"/>
+          <circle cx="76" cy="50" r="3.4" fill="var(--accent)"/>
+          <circle cx="110" cy="82" r="3.4" fill="var(--accent)"/>
+          <circle cx="142" cy="52" r="3.4" fill="var(--accent)"/>
+          <rect x="138" y="16" width="19" height="19" rx="5" stroke="var(--accent)"
+                stroke-opacity=".5" fill="none" stroke-width="1.4"/>
+          <path d="M143 25.5h9M147.5 21v9" stroke="var(--accent)" stroke-opacity=".5"
+                stroke-width="1.4" stroke-linecap="round"/>
         </svg>
-        <h2 data-i18n="action.openImage">Open Image</h2>
-        <p data-i18n="app.tagline">Digitize data from graphs in images</p>
+        <h2 data-i18n="app.openTitle">Open an image to begin</h2>
+        <p data-i18n="app.openSubtitle">Point it at a graph, a plot or a map and turn the curve into a data table.</p>
         <button class="primary" data-action="open-image" data-i18n="action.openImage">Open Image</button>
-        <p class="hint-small">PNG · JPG · BMP · GIF · TIFF · WEBP</p>
+        <p class="hint-small">PNG · JPG · BMP · GIF · WEBP</p>
+
+        <div class="quickstart">
+          <div class="quickstart-item">
+            <b><kbd>S</kbd><span data-i18n="qs.scaleTitle">Set the scale</span></b>
+            <span data-i18n="qs.scaleBody">Click the four axis ends, then type the real values.</span>
+          </div>
+          <div class="quickstart-item">
+            <b><kbd>L</kbd><span data-i18n="qs.pickTitle">Pick the curve colour</span></b>
+            <span data-i18n="qs.pickBody">One click on the curve, one click on the background.</span>
+          </div>
+          <div class="quickstart-item">
+            <b><kbd>T</kbd><span data-i18n="qs.digitizeTitle">Digitise</span></b>
+            <span data-i18n="qs.digitizeBody">Auto trace a solid line, or sample a region on a grid.</span>
+          </div>
+        </div>
       </div>
 
       <div class="stage-hint" id="stage-hint"></div>
@@ -388,6 +416,7 @@
             <th class="col-idx" data-i18n="table.index">#</th>
             <th class="col-x sortable" data-sort="x"><span data-i18n="table.x">X</span><i class="sort-arrow"></i></th>
             <th class="col-y sortable" data-sort="y"><span data-i18n="table.y">Y</span><i class="sort-arrow"></i></th>
+            <th class="col-fill"></th>
             <th class="col-act"></th>
           </tr>
         </thead>

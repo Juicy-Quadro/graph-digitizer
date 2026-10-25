@@ -59,9 +59,9 @@ app.whenReady().then(async () => {
     ${lang === 'auto' ? '' : `g.setLanguage(${JSON.stringify(lang)});`}
     g.setTheme(${JSON.stringify(theme)});
     const truth = ${JSON.stringify(truth)};
-    await g.loadImage(${JSON.stringify(dataURL)}, 'sample3.pcx');
+    ${scene === 'empty' ? '' : `await g.loadImage(${JSON.stringify(dataURL)}, 'sample3.pcx');`}
     const line = truth.lines[truth.scaleIndex];
-    g.setSampling({ method: 'color', lineColor: line.lineColor, bgColor: [255,255,255], tolerance: 0.06, minSize: 2 });
+    ${scene === 'empty' ? '' : `g.setSampling({ method: 'color', lineColor: line.lineColor, bgColor: [255,255,255], tolerance: 0.06, minSize: 2 });`}
     ${scene === 'settings' ? `
     g.setCalibration(${JSON.stringify(truth.calibration.points)}, truth.calibration.xScale, truth.calibration.yScale);
     document.querySelector('[data-action="settings"]').click();

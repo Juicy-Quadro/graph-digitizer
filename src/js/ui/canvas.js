@@ -21,6 +21,12 @@
     const ctx = canvas.getContext('2d');
     const handlers = {};
 
+    /* Mask overlay options are mutable: the inspector drives them live. */
+    const maskOpts = {
+      showMask: opt.showMask !== false,
+      maskOpacity: opt.maskOpacity === undefined ? 0.45 : opt.maskOpacity
+    };
+
     let image = null;            // { imageData, width, height, name }
     let maskInfo = null;
     let maskCanvas = null;
@@ -126,13 +132,13 @@
       };
     }
 
-    function buildMaskCanvas() {
+    function buildMaskCanvas(accent) {
       if (!maskInfo) {
         maskCanvas = null;
         maskToken = null;
         return;
       }
-      const t = theme();
+      const colour = accent || theme().accent;
       const { mask, width, height } = maskInfo;
       const off = document.createElement('canvas');
       off.width = width;
@@ -140,9 +146,9 @@
       const octx = off.getContext('2d');
       const img = octx.createImageData(width, height);
       const d = img.data;
-      const r = parseInt(t.accent.slice(1, 3), 16);
-      const g = parseInt(t.accent.slice(3, 5), 16);
-      const b = parseInt(t.accent.slice(5, 7), 16);
+      const r = parseInt(colour.slice(1, 3), 16);
+      const g = parseInt(colour.slice(3, 5), 16);
+      const b = parseInt(colour.slice(5, 7), 16);
       for (let i = 0, p = 0; i < mask.length; i++, p += 4) {
         if (!mask[i]) continue;
         d[p] = r;
@@ -152,13 +158,17 @@
       }
       octx.putImageData(img, 0, 0);
       maskCanvas = off;
-      maskToken = t.accent;
+      maskToken = colour;
     }
 
     function render() {
       const size = cssSize();
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, size.w, size.h);
+
+      // The mask overlay bakes in the accent colour, so it has to be rebuilt
+      // whenever the theme changes.
+      if (maskInfo && maskToken !== theme().accent) buildMaskCanvas();
 
       if (!image) {
         renderCalibOverlay(size);
@@ -172,10 +182,12 @@
 
       ctx.drawImage(image.canvas, 0, 0);
 
-      if (maskCanvas && opt.showMask && opt.maskOpacity > 0) {
+      if (maskCanvas && maskOpts.showMask && maskOpts.maskOpacity > 0) {
         ctx.save();
-        ctx.globalAlpha = opt.maskOpacity;
-        ctx.globalCompositeOperation = 'multiply';
+        ctx.globalAlpha = maskOpts.maskOpacity;
+        // Normal alpha compositing keeps the overlay readable on light *and*
+        // dark figures; a multiply blend would darken the curve into a black
+        // background instead of tinting it.
         ctx.drawImage(maskCanvas, 0, 0);
         ctx.restore();
       }
@@ -482,6 +494,10 @@
       setMask(info) {
         maskInfo = info;
         buildMaskCanvas();
+        render();
+      },
+      setMaskOptions(patch) {
+        Object.assign(maskOpts, patch || {});
         render();
       },
       setCalibration(calib, points) {
