@@ -38,32 +38,78 @@ $notes = @'
 
 Digitise data points out of graphs and plots in images.
 
-### What is new in 1.1.0
+### What is new in 1.2.0
 
-**Interface rebuilt**
+This is a defect fix release. An independent audit of the whole code base
+found **36 defects**; every one of them is fixed here.
 
-- A single set of design tokens drives the whole application; the dark and
-  light themes were re-tuned together instead of drifting apart.
-- The data table was redone: right aligned numbers, tabular figures, zebra
-  rows and a compact row height.
-- The empty state now carries a three step quick start guide
-  (`S` set the scale, `L` pick the curve colour, `T` digitise).
-- The theme button shows the icon of the mode that is actually active.
+**The numbers were the worst**
 
-**Experience fixes**
+- **The calibration used two incompatible geometries at once.** `toLogical`
+  projected the point perpendicular onto the axis while the constant-X and
+  constant-Y lines were built as affine iso-lines. The two only agree on
+  perpendicular axes, so on a tilted figure the logical X of a curve was not
+  monotonic and the order of the data was wrong. The model is now a single
+  affine basis decomposition. On the tilted reference figure the truth values
+  are monotonic again (108 of 108 points, was 77 of 108) and the curvature of
+  the mapped curve drops by a factor of 58.
+- **Changing the calibration did not update a single digitised point.** The
+  table and all eight exports kept the old numbers while the interface showed
+  the new calibration. Every point is now recomputed from its pixel position.
+- **Opening a second figure kept the calibration and the points of the first
+  one**, so the export of file B contained the data of file A.
+- The combined mask mode counted the black axes, the grid and the labels as
+  curve; the tracer happily followed them (839 px became 155 px).
+- The tracer jumped onto an unrelated parallel structure and kept tracing it;
+  the tolerance is now measured against the walking point and the heading is
+  updated after a bridge (108 points became 49, and a 6 px gap is still
+  bridged).
+- A run that hit the point limit was silently cut short. The limit is now
+  reported and shown in the status bar.
+- Area sampling missed intersections at a coarse step, anchored the grid on
+  the left edge and returned the intersections of a vertical sampling line in
+  no particular order.
 
-- The *Show detection mask* switch and the opacity slider really work now -
-  they were writing to the store while the canvas read a frozen copy.
-- The mask overlay stays readable on dark figures (it used a multiply blend
-  that turned the curve black).
-- Changing the calibration now **recomputes every digitised point** from its
-  pixel position, so the table and every export show numbers that match the
-  calibration you can see.
-- Opening a new figure clears the previous calibration and points instead of
-  exporting them under the new file name.
-- Renaming a series uses the in-app dialog (Electron has no `window.prompt`).
-- TIFF is no longer offered: Chromium cannot decode it, and a file that
-  silently fails to open is worse than a format that is honestly missing.
+**The interface did what it was told**
+
+- A click was measured in **image** pixels, so the same gesture behaved
+  differently at every zoom level: at 40x a 40 pixel drag counted as a click,
+  at 0.5x a two pixel jitter threw the click away. The threshold is now in
+  screen pixels.
+- The canvas and the data table kept their own selection. Deleting a point
+  made the canvas paint the "selected" colour onto the neighbouring point
+  while the table showed an empty selection. The table owns the selection
+  now, the canvas mirrors it per series and clamps it to the current point
+  count.
+- A cancelled pointer (the system took the gesture over) created a data point
+  out of thin air.
+- The click that ended a cell edit never reached its row.
+- The *Show detection mask* switch and the opacity slider did nothing.
+- Clicking a series tab did not repaint the canvas.
+- Renaming a series could never succeed: Electron has no `window.prompt`.
+- The native `Delete` accelerator swallowed the key inside a text field, so
+  deleting a character deleted a data point.
+
+**The application was too trusting**
+
+- The renderer was served from `file://`, where `script-src 'self'` matches
+  every local file. It now runs on a custom `app://` scheme, so the policy
+  really keeps the renderer inside the application. A `file://` script is
+  blocked, and it is checked in the test suite.
+- The renderer could read **any** file the main process could read through a
+  channel that had no caller at all. That channel is gone, and the remaining
+  one is limited to the folders the user opened through a native dialog.
+- The test hook that the automation uses is behind two switches and does not
+  ship in the release.
+
+**The exports told lies**
+
+- A missing measurement was formatted as a real `0`, and the SVG, DXF and EPS
+  writers emitted literal `NaN` coordinates, which makes the whole file
+  unreadable. Every format now either leaves the cell empty or drops the
+  point it cannot represent.
+- The header of a multi series CSV, text or spreadsheet file did not line up
+  with the data columns.
 
 ### Highlights
 
@@ -85,7 +131,16 @@ Digitise data points out of graphs and plots in images.
 
 The tracer was validated against the reference points that GetData Graph
 Digitizer 2.26 produced for the same figures: **100 percent of the reference
-points within 2 px, 0.80 px mean deviation**.
+points within 2 px, 0.80 px mean deviation**. The calibration pipeline is
+validated on three real workspaces as well: the calibration is valid, every
+reference point maps to a finite logical value and the pixel round trip is
+below 1e-13 px.
+
+### Regression suites
+
+Five executable suites, 103 assertions in total:
+
+    node tools/run-tests.js
 
 ### Install
 
@@ -112,7 +167,7 @@ Windows 10 or newer, 64 bit.
     npm install
     npm start          # run it
     npm run dist       # produce the installers in release/
-    node tools/algorithm-test.js
+    npm test           # run every regression suite
 '@
 
 $notes = $notes.Replace('__VERSION__', $Tag.TrimStart('v'))
