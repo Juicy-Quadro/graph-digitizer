@@ -1,0 +1,67 @@
+{
+  "name": "graph-digitizer",
+  "productName": "Graph Digitizer",
+  "version": "1.0.0",
+  "description": "Graph Digitizer - digitize data points from graphs and plots in images.",
+  "main": "electron/main.js",
+  "author": {
+    "name": "Graph Digitizer"
+  },
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --remote-debugging-port=9333",
+    "pack": "electron-builder --win --x64 --dir",
+    "dist": "electron-builder --win --x64"
+  },
+  "devDependencies": {
+    "electron": "33.4.11",
+    "electron-builder": "25.1.8"
+  },
+  "build": {
+    "appId": "com.graphdigitizer.app",
+    "productName": "Graph Digitizer",
+    "copyright": "Copyright © 2026",
+    "asar": true,
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "electron/**/*",
+      "src/**/*",
+      "build/icon.png",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        },
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "build/icon.ico",
+      "signAndEditExecutable": false,
+      "artifactName": "GraphDigitizer-${version}-${arch}.${ext}"
+    },
+    "afterPack": "tools/after-pack.js",
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Graph Digitizer",
+      "installerIcon": "build/icon.ico",
+      "uninstallDisplayName": "Graph Digitizer ${version}"
+    },
+    "portable": {
+      "artifactName": "GraphDigitizer-${version}-portable.exe"
+    }
+  }
+}

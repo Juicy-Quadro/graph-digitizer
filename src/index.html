@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'" />
+  <title>Graph Digitizer</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<div id="app">
+
+  <!-- ------------------------------------------------------------ title bar -->
+  <header class="titlebar">
+    <div class="brand">
+      <svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M3 20h18M3 20V4" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+        <path d="M5 16c3-1 4-7 7-7s4 3 7 2" stroke="var(--accent)" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+        <circle cx="12" cy="9" r="1.8" fill="var(--accent)"/>
+      </svg>
+      <div class="brand-text">
+        <strong data-i18n="app.name">Graph Digitizer</strong>
+        <span data-i18n="app.tagline">Digitize data from graphs in images</span>
+      </div>
+    </div>
+
+    <div class="toolbar" id="toolbar">
+      <button class="tb-btn" data-action="open-image" title="Open Image (Ctrl+O)">
+        <svg viewBox="0 0 20 20"><path d="M3 15V6a1 1 0 011-1h4l1.5 2H16a1 1 0 011 1v7a1 1 0 01-1 1H4a1 1 0 01-1-1z" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>
+        <span data-i18n="action.openImage">Open Image</span>
+      </button>
+      <button class="tb-btn" data-action="save-workspace" title="Save Workspace (Ctrl+S)">
+        <svg viewBox="0 0 20 20"><path d="M4 3h9l3 3v11H4z" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M7 3v5h6V3M7 17v-5h6v5" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>
+        <span data-i18n="action.saveWorkspace">Save</span>
+      </button>
+      <button class="tb-btn" data-action="export" title="Export Data (Ctrl+E)">
+        <svg viewBox="0 0 20 20"><path d="M10 3v9m0 0l3.5-3.5M10 12L6.5 8.5M4 15v1a1 1 0 001 1h10a1 1 0 001-1v-1" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+        <span data-i18n="action.export">Export</span>
+      </button>
+
+      <span class="tb-sep"></span>
+
+      <button class="tb-btn icon-only" data-action="undo" title="Undo (Ctrl+Z)">
+        <svg viewBox="0 0 20 20"><path d="M7 6L3.5 9.5 7 13M4 9.5h7.5a4.5 4.5 0 110 9H8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <button class="tb-btn icon-only" data-action="redo" title="Redo (Ctrl+Y)">
+        <svg viewBox="0 0 20 20"><path d="M13 6l3.5 3.5L13 13M16 9.5H8.5a4.5 4.5 0 100 9H12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+
+      <span class="tb-sep"></span>
+
+      <div class="seg" id="lang-switch" role="group">
+        <button data-lang="en" class="active">EN</button>
+        <button data-lang="zh">中文</button>
+      </div>
+      <button class="tb-btn icon-only theme-btn" data-action="toggle-theme" data-theme-mode="auto" title="Theme">
+        <svg class="ic-auto" viewBox="0 0 20 20"><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M10 3a7 7 0 010 14z" fill="currentColor"/></svg>
+        <svg class="ic-dark" viewBox="0 0 20 20"><path d="M15.2 12.3A6.2 6.2 0 017.7 4.8a6.4 6.4 0 107.5 7.5z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+        <svg class="ic-light" viewBox="0 0 20 20"><circle cx="10" cy="10" r="3.6" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M10 2v2M10 16v2M2 10h2M16 10h2M4.4 4.4l1.4 1.4M14.2 14.2l1.4 1.4M15.6 4.4l-1.4 1.4M5.8 14.2l-1.4 1.4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+      </button>
+      <button class="tb-btn icon-only" data-action="settings" title="Settings (Ctrl+,)" data-i18n-title="settings.title">
+        <svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="2.6" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M10 2.6v2.2M10 15.2v2.2M2.6 10h2.2M15.2 10h2.2M4.8 4.8l1.6 1.6M13.6 13.6l1.6 1.6M15.2 4.8l-1.6 1.6M6.4 13.6l-1.6 1.6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- ------------------------------------------------------------ main body -->
+  <div class="body">
+
+    <!-- tool rail -->
+    <nav class="toolrail" id="toolrail">
+      <button class="tool" data-tool="select" title="Inspect (V)">
+        <svg viewBox="0 0 20 20"><path d="M4 3l11 6.5-4.6 1.2L8 16z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+        <em data-i18n="tool.select">Inspect</em>
+      </button>
+      <button class="tool" data-tool="scale" title="Set Scale (S)">
+        <svg viewBox="0 0 20 20"><path d="M2 15L15 2M6 18h12M4 14v4M8 10v4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+        <em data-i18n="tool.scale">Set Scale</em>
+      </button>
+      <button class="tool" data-tool="lineColor" title="Line Colour (L)">
+        <svg viewBox="0 0 20 20"><path d="M10 2.5l7 7-7 8-7-8z" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M3 9.5h14" stroke="currentColor" stroke-width="1.4"/></svg>
+        <em data-i18n="tool.lineColor">Line Colour</em>
+      </button>
+      <button class="tool" data-tool="bgColor" title="Background Colour (B)">
+        <svg viewBox="0 0 20 20"><rect x="3" y="3" width="14" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M3 13l4-4 3 3 3-4 4 5" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>
+        <em data-i18n="tool.bgColor">Background Colour</em>
+      </button>
+      <span class="rail-sep"></span>
+      <button class="tool" data-tool="trace" title="Auto Trace (T)">
+        <svg viewBox="0 0 20 20"><path d="M3 15c3 0 4-8 7-8s3 6 7 6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="3" cy="15" r="1.8" fill="currentColor"/></svg>
+        <em data-i18n="tool.trace">Auto Trace</em>
+      </button>
+      <button class="tool" data-tool="area" title="Digitize Area (G)">
+        <svg viewBox="0 0 20 20"><rect x="3" y="3" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M3 8h14M3 12h14M8 3v14M12 3v14" stroke="currentColor" stroke-width="1" opacity=".6"/></svg>
+        <em data-i18n="tool.area">Digitize Area</em>
+      </button>
+      <span class="rail-sep"></span>
+      <button class="tool" data-tool="point" title="Add Point (P)">
+        <svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="3" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M10 2v4M10 14v4M2 10h4M14 10h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        <em data-i18n="tool.point">Add Point</em>
+      </button>
+      <button class="tool" data-tool="erase" title="Erase Point (E)">
+        <svg viewBox="0 0 20 20"><path d="M6 16l-3-3 8-8 5 5-7 7z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M11 5l5 5" stroke="currentColor" stroke-width="1.4"/></svg>
+        <em data-i18n="tool.erase">Erase Point</em>
+      </button>
+    </nav>
+
+    <!-- canvas stage -->
+    <main class="stage" id="stage">
+      <canvas id="canvas"></canvas>
+
+      <div class="empty-state" id="empty-state">
+        <svg viewBox="0 0 120 84" class="empty-art" aria-hidden="true">
+          <rect x="2" y="2" width="116" height="80" rx="4" fill="none" stroke="currentColor" stroke-width="1.2" opacity=".45"/>
+          <path d="M18 66V18M18 66h84" fill="none" stroke="currentColor" stroke-width="1.6" opacity=".65"/>
+          <path d="M22 58c10-2 14-26 26-26s12 18 24 16 18-20 26-18" fill="none" stroke="var(--accent)" stroke-width="2.2" stroke-linecap="round"/>
+          <circle cx="48" cy="32" r="2.6" fill="var(--accent)"/>
+          <circle cx="72" cy="48" r="2.6" fill="var(--accent)"/>
+          <circle cx="98" cy="30" r="2.6" fill="var(--accent)"/>
+        </svg>
+        <h2 data-i18n="action.openImage">Open Image</h2>
+        <p data-i18n="app.tagline">Digitize data from graphs in images</p>
+        <button class="primary" data-action="open-image" data-i18n="action.openImage">Open Image</button>
+        <p class="hint-small">PNG · JPG · BMP · GIF · TIFF · WEBP</p>
+      </div>
+
+      <div class="stage-hint" id="stage-hint"></div>
+
+      <div class="zoom-bar">
+        <button data-action="zoom-out" title="Zoom out">−</button>
+        <button data-action="zoom-actual" class="zoom-label" id="zoom-label">100%</button>
+        <button data-action="zoom-in" title="Zoom in">+</button>
+        <button data-action="zoom-fit" title="Fit to window">
+          <svg viewBox="0 0 16 16"><path d="M2 6V2h4M14 6V2h-4M2 10v4h4M14 10v4h-4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+    </main>
+
+    <!-- inspector -->
+    <aside class="inspector" id="inspector">
+
+      <section class="panel" data-panel="calibration">
+        <h3 class="panel-title">
+          <span data-i18n="panel.calibration">Calibration</span>
+          <span class="panel-state" id="calib-state"></span>
+        </h3>
+        <div class="panel-body">
+          <p class="hint" data-i18n="calib.hint">Assign logical values to the four calibration points.</p>
+          <table class="calib-table">
+            <thead>
+              <tr>
+                <th data-i18n="calib.point">Point</th>
+                <th data-i18n="calib.pixel">Pixel</th>
+                <th data-i18n="calib.value">Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr data-calib="xmin">
+                <td class="mono">Xmin</td>
+                <td class="px-cell"><span class="px-val">—</span></td>
+                <td><input type="number" class="calib-value" step="any" /></td>
+              </tr>
+              <tr data-calib="xmax">
+                <td class="mono">Xmax</td>
+                <td class="px-cell"><span class="px-val">—</span></td>
+                <td><input type="number" class="calib-value" step="any" /></td>
+              </tr>
+              <tr data-calib="ymin">
+                <td class="mono">Ymin</td>
+                <td class="px-cell"><span class="px-val">—</span></td>
+                <td><input type="number" class="calib-value" step="any" /></td>
+              </tr>
+              <tr data-calib="ymax">
+                <td class="mono">Ymax</td>
+                <td class="px-cell"><span class="px-val">—</span></td>
+                <td><input type="number" class="calib-value" step="any" /></td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="row two">
+            <label class="field">
+              <span data-i18n="calib.xScale">X axis scale</span>
+              <select id="calib-xscale">
+                <option value="linear" data-i18n="calib.scale.linear">Linear</option>
+                <option value="log" data-i18n="calib.scale.log">Logarithmic</option>
+              </select>
+            </label>
+            <label class="field">
+              <span data-i18n="calib.yScale">Y axis scale</span>
+              <select id="calib-yscale">
+                <option value="linear" data-i18n="calib.scale.linear">Linear</option>
+                <option value="log" data-i18n="calib.scale.log">Logarithmic</option>
+              </select>
+            </label>
+          </div>
+          <div class="row two">
+            <button class="ghost" data-action="calib-pixel" data-i18n="calib.pixelMode">Use pixel coordinates</button>
+            <button class="ghost" data-action="calib-reset" data-i18n="action.reset">Reset</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" data-panel="sampling">
+        <h3 class="panel-title"><span data-i18n="panel.sampling">Curve Detection</span></h3>
+        <div class="panel-body">
+          <label class="field">
+            <span data-i18n="sample.method">Identification method</span>
+            <select id="sample-method">
+              <option value="color" data-i18n="sample.method.color">By colour</option>
+              <option value="intensity" data-i18n="sample.method.intensity">By intensity</option>
+              <option value="combined" data-i18n="sample.method.combined">Combined</option>
+            </select>
+          </label>
+          <label class="field slider">
+            <span><span data-i18n="sample.tolerance">Tolerance</span><em id="tol-value">12%</em></span>
+            <input type="range" id="sample-tolerance" min="1" max="60" step="1" value="12" />
+          </label>
+          <div class="row two">
+            <label class="field">
+              <span data-i18n="sample.minSize">Ignore features smaller than</span>
+              <div class="with-unit">
+                <input type="number" id="sample-minsize" min="0" max="500" step="1" value="2" />
+                <i data-i18n="sample.pixels">px</i>
+              </div>
+            </label>
+            <label class="field">
+              <span data-i18n="sample.thickness">Curve thickness</span>
+              <div class="with-unit">
+                <input type="number" id="sample-thickness" min="0" max="4" step="1" value="0" />
+                <i data-i18n="sample.pixels">px</i>
+              </div>
+            </label>
+          </div>
+          <div class="swatches">
+            <div class="swatch-row">
+              <span data-i18n="sample.lineColor">Line colour</span>
+              <label class="swatch"><input type="color" id="line-color" value="#000000" /></label>
+              <span class="mono hex" id="line-color-hex">#000000</span>
+            </div>
+            <div class="swatch-row">
+              <span data-i18n="sample.bgColor">Background colour</span>
+              <label class="swatch"><input type="color" id="bg-color" value="#ffffff" /></label>
+              <span class="mono hex" id="bg-color-hex">#ffffff</span>
+            </div>
+          </div>
+          <button class="ghost wide" data-action="auto-detect" data-i18n="action.autoDetect">Auto Detect</button>
+          <label class="check">
+            <input type="checkbox" id="show-mask" checked />
+            <span data-i18n="sample.showMask">Show detection mask</span>
+          </label>
+          <label class="field slider">
+            <span><span data-i18n="sample.opacity">Mask opacity</span><em id="opacity-value">45%</em></span>
+            <input type="range" id="mask-opacity" min="5" max="90" step="5" value="45" />
+          </label>
+        </div>
+      </section>
+
+      <section class="panel" data-panel="trace">
+        <h3 class="panel-title"><span data-i18n="panel.trace">Auto Trace</span></h3>
+        <div class="panel-body">
+          <label class="field">
+            <span data-i18n="trace.direction">Direction</span>
+            <select id="trace-direction">
+              <option value="both" data-i18n="trace.direction.both">Both directions</option>
+              <option value="forward" data-i18n="trace.direction.forward">Chosen direction</option>
+            </select>
+          </label>
+          <div class="row two">
+            <label class="field">
+              <span data-i18n="trace.maxGap">Maximum gap</span>
+              <div class="with-unit">
+                <input type="number" id="trace-maxgap" min="0" max="60" step="1" value="6" />
+                <i data-i18n="sample.pixels">px</i>
+              </div>
+            </label>
+            <label class="field">
+              <span data-i18n="trace.spacing">Point spacing</span>
+              <div class="with-unit">
+                <input type="number" id="trace-spacing" min="0" max="100" step="1" value="0" />
+                <i data-i18n="sample.pixels">px</i>
+              </div>
+            </label>
+          </div>
+          <label class="field slider">
+            <span><span data-i18n="trace.smooth">Smoothing</span><em id="smooth-value">1</em></span>
+            <input type="range" id="trace-smooth" min="0" max="4" step="1" value="1" />
+          </label>
+        </div>
+      </section>
+
+      <section class="panel" data-panel="area">
+        <h3 class="panel-title"><span data-i18n="panel.area">Area Sampling</span></h3>
+        <div class="panel-body">
+          <label class="field">
+            <span data-i18n="area.grid">Grid</span>
+            <select id="area-mode">
+              <option value="pixels" data-i18n="area.grid.pixels">Pixels</option>
+              <option value="logicalX" data-i18n="area.grid.logicalX">Logical X</option>
+              <option value="logicalY" data-i18n="area.grid.logicalY">Logical Y</option>
+            </select>
+          </label>
+          <div class="row two">
+            <label class="field">
+              <span data-i18n="area.spacing">Spacing</span>
+              <input type="number" id="area-spacing" min="0.5" max="500" step="0.5" value="10" />
+            </label>
+            <label class="field">
+              <span data-i18n="area.offset">Offset</span>
+              <input type="number" id="area-offset" step="any" value="0" />
+            </label>
+          </div>
+          <div class="row two">
+            <label class="field">
+              <span data-i18n="area.placement">Point placement</span>
+              <select id="area-placement">
+                <option value="center" data-i18n="area.placement.center">Middle of the curve</option>
+                <option value="edge" data-i18n="area.placement.edge">Area boundary</option>
+              </select>
+            </label>
+            <label class="field">
+              <span data-i18n="area.rotation">Rotation</span>
+              <div class="with-unit">
+                <input type="number" id="area-rotation" min="-90" max="90" step="0.5" value="0" />
+                <i data-i18n="area.degrees">deg</i>
+              </div>
+            </label>
+          </div>
+          <button class="ghost wide" data-action="clear-region" data-i18n="area.clearRegion">Clear region</button>
+        </div>
+      </section>
+
+      <section class="panel" data-panel="export">
+        <h3 class="panel-title"><span data-i18n="panel.export">Export</span></h3>
+        <div class="panel-body">
+          <label class="field">
+            <span data-i18n="export.format">Format</span>
+            <select id="export-format">
+              <option value="csv">CSV</option>
+              <option value="txt">Text</option>
+              <option value="xls">Excel (XML)</option>
+              <option value="xml">XML</option>
+              <option value="json">JSON</option>
+              <option value="svg">SVG chart</option>
+              <option value="dxf">AutoCAD DXF</option>
+              <option value="eps">PostScript EPS</option>
+            </select>
+          </label>
+          <div class="row two">
+            <label class="field">
+              <span data-i18n="export.delimiter">Delimiter</span>
+              <select id="export-delimiter">
+                <option value=",">Comma ,</option>
+                <option value=";">Semicolon ;</option>
+                <option value="\t">Tab</option>
+              </select>
+            </label>
+            <label class="field">
+              <span data-i18n="export.decimals">Decimals</span>
+              <input type="number" id="export-decimals" min="0" max="15" step="1" value="6" />
+            </label>
+          </div>
+          <div class="row two">
+            <button class="primary" data-action="export" data-i18n="action.export">Export</button>
+            <button class="ghost" data-action="copy" data-i18n="action.copy">Copy</button>
+          </div>
+          <p class="hint" data-i18n="export.hint">Export the current series as a data table.</p>
+        </div>
+      </section>
+    </aside>
+  </div>
+
+  <!-- ------------------------------------------------------------ data drawer -->
+  <section class="drawer" id="drawer">
+    <header class="drawer-head">
+      <div class="series-tabs" id="series-tabs"></div>
+      <div class="drawer-actions">
+        <button class="ghost small" data-action="add-series" data-i18n="series.add">Add series</button>
+        <button class="ghost small" data-action="clear-points" data-i18n="action.clear">Clear</button>
+        <button class="ghost small" data-action="toggle-drawer" title="Collapse">
+          <svg viewBox="0 0 16 16"><path d="M4 10l4-4 4 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+    </header>
+    <div class="table-wrap" id="table-wrap">
+      <table class="data-table" id="data-table">
+        <thead>
+          <tr>
+            <th class="col-idx" data-i18n="table.index">#</th>
+            <th class="col-x sortable" data-sort="x"><span data-i18n="table.x">X</span><i class="sort-arrow"></i></th>
+            <th class="col-y sortable" data-sort="y"><span data-i18n="table.y">Y</span><i class="sort-arrow"></i></th>
+            <th class="col-act"></th>
+          </tr>
+        </thead>
+        <tbody id="data-body"></tbody>
+      </table>
+      <div class="table-empty" id="table-empty" data-i18n="table.empty">No data points yet.</div>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------------------ status bar -->
+  <footer class="statusbar">
+    <span class="status-item" id="status-tool">—</span>
+    <span class="status-grow"></span>
+    <span class="status-item mono" id="status-cursor">—</span>
+    <span class="status-item mono" id="status-logical">—</span>
+    <span class="status-item" id="status-count">0</span>
+  </footer>
+
+  <div class="toasts" id="toasts"></div>
+
+  <!-- ------------------------------------------------------------ modal -->
+  <div class="modal-backdrop" id="modal-backdrop" hidden>
+    <div class="modal" role="dialog" aria-modal="true">
+      <h3 id="modal-title">Title</h3>
+      <div id="modal-body"></div>
+      <div class="modal-actions">
+        <button class="ghost" data-action="modal-close" data-i18n="action.close">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="js/i18n.js"></script>
+<script src="js/state.js"></script>
+<script src="js/core/geometry.js"></script>
+<script src="js/core/calibrate.js"></script>
+<script src="js/core/mask.js"></script>
+<script src="js/core/trace.js"></script>
+<script src="js/core/area.js"></script>
+<script src="js/core/exporters.js"></script>
+<script src="js/ui/canvas.js"></script>
+<script src="js/ui/table.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

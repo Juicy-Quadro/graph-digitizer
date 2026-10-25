@@ -1,0 +1,402 @@
+/*
+ * Bilingual UI strings. The active language is switched at runtime from the
+ * settings panel; `t()` resolves a key against the active dictionary and
+ * falls back to English for any missing entry.
+ */
+(function (root) {
+  'use strict';
+
+  const GD = root.GD || (root.GD = {});
+
+  const DICT = {
+    en: {
+      'app.name': 'Graph Digitizer',
+      'app.tagline': 'Digitize data from graphs in images',
+
+      'menu.file': 'File',
+      'menu.edit': 'Edit',
+      'menu.view': 'View',
+      'menu.help': 'Help',
+      'menu.file.openImage': 'Open Image…',
+      'menu.file.openWorkspace': 'Open Workspace…',
+      'menu.file.saveWorkspace': 'Save Workspace…',
+      'menu.file.export': 'Export Data…',
+      'menu.file.exit': 'Exit',
+      'menu.edit.undo': 'Undo',
+      'menu.edit.redo': 'Redo',
+      'menu.edit.delete': 'Delete Points',
+      'menu.edit.selectAll': 'Select All',
+      'menu.view.zoomIn': 'Zoom In',
+      'menu.view.zoomOut': 'Zoom Out',
+      'menu.view.zoomFit': 'Fit to Window',
+      'menu.view.zoomActual': 'Actual Size',
+      'menu.view.toggleMask': 'Toggle Mask Overlay',
+      'menu.help.shortcuts': 'Keyboard Shortcuts',
+      'menu.help.about': 'About Graph Digitizer',
+
+      'action.openImage': 'Open Image',
+      'action.openWorkspace': 'Open',
+      'action.saveWorkspace': 'Save',
+      'action.export': 'Export',
+      'action.copy': 'Copy',
+      'action.autoDetect': 'Auto Detect',
+      'action.reset': 'Reset',
+      'action.clear': 'Clear',
+      'action.apply': 'Apply',
+      'action.cancel': 'Cancel',
+      'action.close': 'Close',
+      'action.undo': 'Undo',
+      'action.redo': 'Redo',
+
+      'tool.select': 'Inspect',
+      'tool.select.hint': 'Pan and zoom the image (hold Space to drag).',
+      'tool.scale': 'Set Scale',
+      'tool.scale.hint': 'Click the four axis calibration points in order: Xmin, Xmax, Ymin, Ymax.',
+      'tool.lineColor': 'Line Colour',
+      'tool.lineColor.hint': 'Click on the curve to sample its colour.',
+      'tool.bgColor': 'Background Colour',
+      'tool.bgColor.hint': 'Click on an empty area to sample the background colour.',
+      'tool.trace': 'Auto Trace',
+      'tool.trace.hint': 'Click the start of a curve. Click again to set the tracing direction.',
+      'tool.area': 'Digitize Area',
+      'tool.area.hint': 'Drag a rectangle over the region to sample.',
+      'tool.point': 'Add Point',
+      'tool.point.hint': 'Click to add a data point on the curve.',
+      'tool.erase': 'Erase Point',
+      'tool.erase.hint': 'Click a data point to remove it.',
+
+      'panel.calibration': 'Calibration',
+      'panel.sampling': 'Curve Detection',
+      'panel.trace': 'Auto Trace',
+      'panel.area': 'Area Sampling',
+      'panel.export': 'Export',
+      'panel.series': 'Series',
+
+      'calib.point': 'Point',
+      'calib.pixel': 'Pixel',
+      'calib.value': 'Value',
+      'calib.Xmin': 'Xmin',
+      'calib.Xmax': 'Xmax',
+      'calib.Ymin': 'Ymin',
+      'calib.Ymax': 'Ymax',
+      'calib.xScale': 'X axis scale',
+      'calib.yScale': 'Y axis scale',
+      'calib.scale.linear': 'Linear',
+      'calib.scale.log': 'Logarithmic',
+      'calib.reset': 'Reset calibration',
+      'calib.pixelMode': 'Use pixel coordinates',
+      'calib.hint': 'Assign logical values to the four calibration points.',
+      'calib.pending': 'Click the image to set {point}.',
+
+      'sample.method': 'Identification method',
+      'sample.method.color': 'By colour',
+      'sample.method.intensity': 'By intensity',
+      'sample.method.combined': 'Combined',
+      'sample.tolerance': 'Tolerance',
+      'sample.minSize': 'Ignore features smaller than',
+      'sample.thickness': 'Curve thickness',
+      'sample.lineColor': 'Line colour',
+      'sample.bgColor': 'Background colour',
+      'sample.showMask': 'Show detection mask',
+      'sample.opacity': 'Mask opacity',
+      'sample.pixels': 'px',
+
+      'trace.direction': 'Direction',
+      'trace.direction.both': 'Both directions',
+      'trace.direction.forward': 'Chosen direction',
+      'trace.maxGap': 'Maximum gap',
+      'trace.smooth': 'Smoothing',
+      'trace.spacing': 'Point spacing',
+      'trace.spacing.auto': 'Every pixel',
+
+      'area.grid': 'Grid',
+      'area.grid.pixels': 'Pixels',
+      'area.grid.logicalX': 'Logical X',
+      'area.grid.logicalY': 'Logical Y',
+      'area.spacing': 'Spacing',
+      'area.offset': 'Offset',
+      'area.placement': 'Point placement',
+      'area.placement.center': 'Middle of the curve',
+      'area.placement.edge': 'Area boundary',
+      'area.rotation': 'Rotation',
+      'area.degrees': 'deg',
+      'area.clearRegion': 'Clear region',
+
+      'export.format': 'Format',
+      'export.delimiter': 'Delimiter',
+      'export.decimals': 'Decimals',
+      'export.copy': 'Copy to clipboard',
+      'export.hint': 'Export the digitised data as a table.',
+
+      'table.title': 'Data',
+      'table.index': '#',
+      'table.x': 'X',
+      'table.y': 'Y',
+      'table.empty': 'No data points yet. Pick a tool and click on the image.',
+      'table.points': '{n} points',
+      'table.remove': 'Remove point',
+
+      'series.add': 'Add series',
+      'series.remove': 'Remove series',
+      'series.rename': 'Rename',
+      'series.active': 'Active series',
+
+      'status.zoom': 'Zoom',
+      'status.ready': 'Ready',
+      'status.points': '{n} points',
+      'status.selected': '{n} selected',
+
+      'msg.imageLoaded': 'Loaded {name} ({w}×{h})',
+      'msg.noImage': 'Open an image first.',
+      'msg.calibNeeded': 'Set the scale before digitizing.',
+      'msg.calibIncomplete': 'Calibration is incomplete.',
+      'msg.calibCollinear': 'The two axes are collinear.',
+      'msg.calibCoincide': 'The two points of an axis coincide.',
+      'msg.calibLog': 'Logarithmic scale needs positive values.',
+      'msg.noCurve': 'No curve found at that point.',
+      'msg.tooShort': 'The traced curve is too short.',
+      'msg.traced': 'Traced {n} points.',
+      'msg.areaDone': 'Sampled {n} points.',
+      'msg.pointAdded': 'Point added.',
+      'msg.pointRemoved': 'Point removed.',
+      'msg.exported': 'Exported to {file}.',
+      'msg.copied': 'Data copied to the clipboard.',
+      'msg.saved': 'Workspace saved.',
+      'msg.loaded': 'Workspace loaded.',
+      'msg.undo': 'Undo.',
+      'msg.redo': 'Redo.',
+      'msg.nothingToUndo': 'Nothing to undo.',
+
+      'settings.title': 'Settings',
+      'settings.language': 'Language',
+      'settings.language.en': 'English',
+      'settings.language.zh': '简体中文',
+      'settings.theme': 'Theme',
+      'settings.theme.auto': 'Follow system',
+      'settings.theme.dark': 'Dark',
+      'settings.theme.light': 'Light',
+      'settings.applyNow': 'Applied immediately.',
+      'settings.themeHint': 'Follow system updates the theme whenever the system setting changes.',
+      'menu.view.theme': 'Theme',
+      'menu.view.theme.auto': 'Follow system',
+      'menu.view.theme.dark': 'Dark',
+      'menu.view.theme.light': 'Light',
+
+      'shortcuts.title': 'Keyboard Shortcuts',
+      'shortcuts.body': 'V — Inspect\nS — Set scale\nL — Pick line colour\nB — Pick background colour\nT — Auto trace\nG — Digitize area\nP — Add point\nE — Erase point\n\nSpace + drag — Pan\nWheel — Zoom\nCtrl + wheel — Finer zoom\nF — Fit to window\nCtrl+Z / Ctrl+Y — Undo / Redo\nDelete — Remove selected points\nCtrl+O — Open image\nCtrl+S — Save workspace\nCtrl+E — Export data\nCtrl+C — Copy data',
+
+      'about.title': 'About Graph Digitizer',
+      'about.body': 'Graph Digitizer extracts numeric data from graphs and plots in images.\n\nFour-point calibration, automatic line tracing and area sampling, with export to CSV, text, Excel, XML, JSON, SVG, DXF and EPS.'
+    },
+
+    zh: {
+      'app.name': '图表数字化工具',
+      'app.tagline': '从图片中的图表提取数值数据',
+
+      'menu.file': '文件',
+      'menu.edit': '编辑',
+      'menu.view': '视图',
+      'menu.help': '帮助',
+      'menu.file.openImage': '打开图片…',
+      'menu.file.openWorkspace': '打开工作区…',
+      'menu.file.saveWorkspace': '保存工作区…',
+      'menu.file.export': '导出数据…',
+      'menu.file.exit': '退出',
+      'menu.edit.undo': '撤销',
+      'menu.edit.redo': '重做',
+      'menu.edit.delete': '删除数据点',
+      'menu.edit.selectAll': '全选',
+      'menu.view.zoomIn': '放大',
+      'menu.view.zoomOut': '缩小',
+      'menu.view.zoomFit': '适应窗口',
+      'menu.view.zoomActual': '实际大小',
+      'menu.view.toggleMask': '显示/隐藏识别掩膜',
+      'menu.help.shortcuts': '键盘快捷键',
+      'menu.help.about': '关于',
+
+      'action.openImage': '打开图片',
+      'action.openWorkspace': '打开',
+      'action.saveWorkspace': '保存',
+      'action.export': '导出',
+      'action.copy': '复制',
+      'action.autoDetect': '自动识别',
+      'action.reset': '重置',
+      'action.clear': '清除',
+      'action.apply': '应用',
+      'action.cancel': '取消',
+      'action.close': '关闭',
+      'action.undo': '撤销',
+      'action.redo': '重做',
+
+      'tool.select': '查看',
+      'tool.select.hint': '平移与缩放图片（按住空格拖动）。',
+      'tool.scale': '设置标定',
+      'tool.scale.hint': '依次点击四个轴标定点：Xmin、Xmax、Ymin、Ymax。',
+      'tool.lineColor': '取线色',
+      'tool.lineColor.hint': '点击曲线以采样其颜色。',
+      'tool.bgColor': '取背景色',
+      'tool.bgColor.hint': '点击空白处以采样背景颜色。',
+      'tool.trace': '自动追踪',
+      'tool.trace.hint': '点击曲线起点；再次点击可指定追踪方向。',
+      'tool.area': '区域取点',
+      'tool.area.hint': '拖出一个矩形区域进行采样。',
+      'tool.point': '手工加点',
+      'tool.point.hint': '点击曲线添加数据点。',
+      'tool.erase': '删除点',
+      'tool.erase.hint': '点击数据点将其删除。',
+
+      'panel.calibration': '坐标标定',
+      'panel.sampling': '曲线识别',
+      'panel.trace': '自动追踪',
+      'panel.area': '区域采样',
+      'panel.export': '导出',
+      'panel.series': '数据系列',
+
+      'calib.point': '标定点',
+      'calib.pixel': '像素',
+      'calib.value': '数值',
+      'calib.Xmin': 'Xmin',
+      'calib.Xmax': 'Xmax',
+      'calib.Ymin': 'Ymin',
+      'calib.Ymax': 'Ymax',
+      'calib.xScale': 'X 轴刻度',
+      'calib.yScale': 'Y 轴刻度',
+      'calib.scale.linear': '线性',
+      'calib.scale.log': '对数',
+      'calib.reset': '重置标定',
+      'calib.pixelMode': '直接使用像素坐标',
+      'calib.hint': '为四个标定点赋予逻辑数值。',
+      'calib.pending': '请点击图片以设置 {point}。',
+
+      'sample.method': '识别方式',
+      'sample.method.color': '按颜色',
+      'sample.method.intensity': '按灰度',
+      'sample.method.combined': '组合',
+      'sample.tolerance': '容差',
+      'sample.minSize': '忽略小于',
+      'sample.thickness': '曲线宽度',
+      'sample.lineColor': '线色',
+      'sample.bgColor': '背景色',
+      'sample.showMask': '显示识别掩膜',
+      'sample.opacity': '掩膜透明度',
+      'sample.pixels': '像素',
+
+      'trace.direction': '追踪方向',
+      'trace.direction.both': '双向',
+      'trace.direction.forward': '指定方向',
+      'trace.maxGap': '最大断点跨度',
+      'trace.smooth': '平滑',
+      'trace.spacing': '取点间距',
+      'trace.spacing.auto': '逐像素',
+
+      'area.grid': '网格',
+      'area.grid.pixels': '像素网格',
+      'area.grid.logicalX': '逻辑 X',
+      'area.grid.logicalY': '逻辑 Y',
+      'area.spacing': '间距',
+      'area.offset': '偏移',
+      'area.placement': '取点位置',
+      'area.placement.center': '曲线中线',
+      'area.placement.edge': '区域边界',
+      'area.rotation': '旋转角度',
+      'area.degrees': '度',
+      'area.clearRegion': '清除区域',
+
+      'export.format': '格式',
+      'export.delimiter': '分隔符',
+      'export.decimals': '小数位数',
+      'export.copy': '复制到剪贴板',
+      'export.hint': '将数字化结果导出为数据表。',
+
+      'table.title': '数据',
+      'table.index': '#',
+      'table.x': 'X',
+      'table.y': 'Y',
+      'table.empty': '暂无数据点。请选择工具并在图片上点击。',
+      'table.points': '{n} 个点',
+      'table.remove': '删除该点',
+
+      'series.add': '新建系列',
+      'series.remove': '删除系列',
+      'series.rename': '重命名',
+      'series.active': '当前系列',
+
+      'status.zoom': '缩放',
+      'status.ready': '就绪',
+      'status.points': '{n} 个点',
+      'status.selected': '已选 {n} 个',
+
+      'msg.imageLoaded': '已载入 {name}（{w}×{h}）',
+      'msg.noImage': '请先打开图片。',
+      'msg.calibNeeded': '请先完成坐标标定。',
+      'msg.calibIncomplete': '标定尚未完成。',
+      'msg.calibCollinear': '两条轴共线，无法标定。',
+      'msg.calibCoincide': '同一轴上的两个点重合。',
+      'msg.calibLog': '对数刻度要求数值为正。',
+      'msg.noCurve': '该位置没有找到曲线。',
+      'msg.tooShort': '追踪到的曲线过短。',
+      'msg.traced': '追踪到 {n} 个点。',
+      'msg.areaDone': '采样得到 {n} 个点。',
+      'msg.pointAdded': '已添加数据点。',
+      'msg.pointRemoved': '已删除数据点。',
+      'msg.exported': '已导出到 {file}。',
+      'msg.copied': '数据已复制到剪贴板。',
+      'msg.saved': '工作区已保存。',
+      'msg.loaded': '工作区已载入。',
+      'msg.undo': '已撤销。',
+      'msg.redo': '已重做。',
+      'msg.nothingToUndo': '没有可撤销的操作。',
+
+      'settings.title': '设置',
+      'settings.language': '语言',
+      'settings.language.en': 'English',
+      'settings.language.zh': '简体中文',
+      'settings.theme': '主题',
+      'settings.theme.auto': '跟随系统',
+      'settings.theme.dark': '深色',
+      'settings.theme.light': '浅色',
+      'settings.applyNow': '已立即生效。',
+      'settings.themeHint': '选择「跟随系统」后，系统主题变化时界面会自动切换。',
+      'menu.view.theme': '主题',
+      'menu.view.theme.auto': '跟随系统',
+      'menu.view.theme.dark': '深色',
+      'menu.view.theme.light': '浅色',
+
+      'shortcuts.title': '键盘快捷键',
+      'shortcuts.body': 'V — 查看\nS — 设置标定\nL — 取线色\nB — 取背景色\nT — 自动追踪\nG — 区域取点\nP — 手工加点\nE — 删除点\n\n空格 + 拖动 — 平移\n滚轮 — 缩放\nCtrl + 滚轮 — 精细缩放\nF — 适应窗口\nCtrl+Z / Ctrl+Y — 撤销 / 重做\nDelete — 删除选中的点\nCtrl+O — 打开图片\nCtrl+S — 保存工作区\nCtrl+E — 导出数据\nCtrl+C — 复制数据',
+
+      'about.title': '关于',
+      'about.body': '图表数字化工具用于从图片中的曲线与图表提取数值数据。\n\n支持四点标定、自动追踪线与区域采样，可导出为 CSV、文本、Excel、XML、JSON、SVG、DXF 与 EPS。'
+    }
+  };
+
+  let current = 'en';
+  const listeners = [];
+
+  function t(key, params) {
+    let value = (DICT[current] && DICT[current][key]);
+    if (value === undefined) value = DICT.en[key];
+    if (value === undefined) return key;
+    if (params) {
+      value = value.replace(/\{(\w+)\}/g, (m, k) => (params[k] !== undefined ? params[k] : m));
+    }
+    return value;
+  }
+
+  function setLanguage(lang) {
+    if (!DICT[lang]) return;
+    current = lang;
+    document.documentElement.setAttribute('lang', lang === 'zh' ? 'zh-CN' : 'en');
+    listeners.forEach((fn) => fn(lang));
+  }
+
+  function getLanguage() {
+    return current;
+  }
+
+  function onLanguageChange(fn) {
+    listeners.push(fn);
+  }
+
+  GD.I18n = { t, setLanguage, getLanguage, onLanguageChange, DICT };
+})(typeof window !== 'undefined' ? window : globalThis);

@@ -1,0 +1,24 @@
+# Dependencies and build output
+node_modules/
+release/
+dist/
+
+# Test fixtures derived from the GetData sample figures
+testdata/
+
+# Downloaded archives and build logs
+*.tgz
+*.log
+
+# Vendored build tool (rcedit, fetched from the electron-builder cache)
+tools/rcedit-x64.exe
+
+# Editor / OS noise
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# Scratch scripts kept out of the repository
+tools/_scratch/
