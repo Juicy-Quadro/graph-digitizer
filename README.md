@@ -15,6 +15,23 @@
 
 ---
 
+## v1.2.0 更新（缺陷修复版）
+
+一次独立审计发现 **36 项缺陷**，本版本全部修完。最关键的几条：
+
+- **标定模型修正**：原实现把"垂直投影"和"仿射等值线"两套不兼容的几何混着用，两轴不垂直时逻辑坐标会错乱。已统一为仿射基分解，在真实倾斜样例上曲率降低 **58 倍**，真值点 X 单调性从 77/108 恢复到 **108/108**
+- **改标定后所有点自动重算**（此前点数组逐字节不变，界面看着刷新了、数字却是旧的）
+- **打开新图自动清空**上一张图的标定与数据
+- **渲染进程迁到自定义 `app://` 协议**，`script-src 'self'` 才真正管得住本地文件；同时删掉了没有任何调用者的 `readText` 特权通道，文件读取限定在用户打开过的目录内
+- **点击/拖拽判定改用屏幕像素**：此前按图像像素算，放大 40 倍后拖 40 像素会被当成点击，缩小后抖 2 像素反而丢掉点击
+- **画布与表格的选中态统一**：删掉一个点后，画布不再把"选中"色画到隔壁点上
+- **原生菜单移除 `Delete` 加速键**：在标定输入框里按 Delete 想删字符，不再顺手删掉数据点
+- **八种导出格式统一处理缺失测量**：不再出现 `NaN` 坐标或被伪造成 0 的数字
+
+完整台账见 [`docs/AUDIT-2026-10-25.md`](docs/AUDIT-2026-10-25.md) 的「修复台账」一节。
+
+---
+
 ## v1.1.0 更新
 
 - **界面全面重做**：统一设计 token、深浅双主题重新调校、数据表重做（数值右对齐 + 等宽数字 + 斑马纹）、空状态重做并加入**三步引导卡**
@@ -32,10 +49,10 @@
 ## 快速开始 · Quick start
 
 **方式一：免安装便携版**
-下载 `GraphDigitizer-1.0.0-portable.exe`，双击即用，不写注册表、不装任何依赖。
+下载 `GraphDigitizer-1.2.0-portable.exe`，双击即用，不写注册表、不装任何依赖。
 
 **方式二：安装版**
-运行 `GraphDigitizer-1.0.0-x64.exe`，可自选安装目录，自动创建桌面与开始菜单快捷方式。
+运行 `GraphDigitizer-1.2.0-x64.exe`，可自选安装目录，自动创建桌面与开始菜单快捷方式。
 
 **方式三：从源码运行**
 
@@ -189,7 +206,15 @@ X = interp(xminValue, xmaxValue, u)   （对数轴时在 log 空间插值）
 
 ## 精度验证 · Validation
 
-测试脚本：`tools/algorithm-test.js`（`node tools/algorithm-test.js`），覆盖标定、掩膜、追踪、区域取点、导出器五组共 **50 项断言**。
+五套可执行回归，覆盖算法、主题、交互体验、安全策略与指针手势：
+
+| 脚本 | 命令 | 内容 |
+|---|---|---|
+| `tools/algorithm-test.js` | `node tools/algorithm-test.js` | 标定 / 掩膜 / 追踪 / 区域取点 / 导出器，**65 项断言** |
+| `tools/theme-test.js` | `electron tools/theme-test.js` | 跟随系统 / 固定主题 / 工具栏切换，**7 项** |
+| `tools/experience-test.js` | `electron tools/experience-test.js` | 换图重置、标定重算、掩膜开关、系列改名、空状态引导，**6 项** |
+| `tools/smoke-test.js` | `electron tools/smoke-test.js` | 真实主进程启动：`app://` 协议、CSP 拦截、测试钩子门控，**11 项** |
+| `tools/ui-test.js` | `electron tools/ui-test.js` | 指针手势阈值、画布/表格选中态同步、编辑后点击不丢失，**14 项** |
 
 验证数据来自 GetData Graph Digitizer 2.26 自带的样例图与 `.gdw` 工作区 —— 工作区里保存了原程序自己提取的真值坐标。
 
@@ -227,7 +252,11 @@ src/
       canvas.js    画布渲染与交互
       table.js     虚拟化数据表
 tools/
-  algorithm-test.js        算法测试
+  algorithm-test.js        算法测试（65 项断言）
+  theme-test.js            主题回归
+  experience-test.js       交互体验回归
+  smoke-test.js            真实主进程冒烟测试
+  ui-test.js               指针手势与选中态回归
   build_fixtures.py        从 GetData 样例生成真值夹具
   capture.js               自动截图
   make_icon_and_fixtures.py

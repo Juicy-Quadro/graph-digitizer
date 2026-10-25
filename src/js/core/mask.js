@@ -8,7 +8,9 @@
  *   color      - the pixel is close to the picked line colour
  *   intensity  - the pixel brightness is close to the picked line brightness
  *                (this is what makes black-on-white line art work)
- *   combined   - either of the two matches
+ *   combined   - either of the two matches, but a brightness match only
+ *                counts when the pixel is clearly closer to the line colour
+ *                than to the background colour
  *
  * The mask can be cleaned (drop isolated specks) and thickened, because plot
  * curves are frequently only one or two pixels wide in a scanned figure.
@@ -67,14 +69,18 @@
       }
       if (!hit && useIntensity) {
         const l = G.luminance(r, g, b);
-        if (Math.abs(l - lineLum) <= lumTol) hit = true;
-      }
-      if (!hit && method === Method.COMBINED) {
-        // Combined mode also accepts anything clearly closer to the line
-        // colour than to the background colour.
-        const dl = G.colorDistance(r, g, b, line[0], line[1], line[2]);
-        const db = G.colorDistance(r, g, b, bg[0], bg[1], bg[2]);
-        if (dl < db) hit = true;
+        const dLine = Math.abs(l - lineLum);
+        if (dLine <= lumTol) {
+          // A brightness match alone also fits every dark element of the
+          // figure (axes, labels, grid lines), so in combined mode the
+          // pixel additionally has to be clearly closer to the line colour
+          // than to the background colour. That keeps combined mode from
+          // returning substantially more pixels than plain colour mode.
+          const clear = method !== Method.COMBINED ||
+            G.colorDistance(r, g, b, line[0], line[1], line[2]) * 2 <
+              G.colorDistance(r, g, b, bg[0], bg[1], bg[2]);
+          if (clear) hit = true;
+        }
       }
       if (hit) {
         mask[i] = 1;
@@ -87,9 +93,18 @@
     }
     if (opt.thickness > 0) {
       dilate(mask, w, h, opt.thickness);
+      // Dilation adds pixels, so the count has to be refreshed.
+      count = countMask(mask);
     }
 
     return { mask, width: w, height: h, count };
+  }
+
+  /** Number of set pixels in a mask. */
+  function countMask(mask) {
+    let n = 0;
+    for (let i = 0; i < mask.length; i++) if (mask[i]) n++;
+    return n;
   }
 
   /** Remove connected components smaller than `minSize` pixels. */

@@ -3,9 +3,14 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('gd', {
+  /**
+   * True only when the renderer was opened with the test hook enabled. The
+   * renderer uses this to decide whether to expose its automation hook.
+   */
+  testHookAllowed: /[?&]testhook=1/.test(window.location.search),
+
   openImage: () => ipcRenderer.invoke('image:open'),
   openWorkspace: () => ipcRenderer.invoke('file:readTextOpen'),
-  readText: (filePath) => ipcRenderer.invoke('file:readText', filePath),
   readBinary: (filePath) => ipcRenderer.invoke('file:readBinary', filePath),
   saveText: (payload) => ipcRenderer.invoke('file:saveText', payload),
   writeClipboard: (text) => ipcRenderer.invoke('clipboard:write', text),

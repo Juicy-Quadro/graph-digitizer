@@ -1,7 +1,8 @@
 'use strict';
 /* Verifies the experience fixes made in the 1.1 pass. */
 
-const { app, BrowserWindow } = require('electron');
+const { app } = require('electron');
+const { createTestWindow } = require('./lib/test-window');
 const fs = require('fs');
 const path = require('path');
 
@@ -15,16 +16,8 @@ const check = (name, ok, detail) => {
 app.disableHardwareAcceleration();
 
 app.whenReady().then(async () => {
-  const win = new BrowserWindow({
-    width: 1440, height: 920, show: false,
-    webPreferences: {
-      preload: path.join(root, 'electron', 'preload.js'),
-      contextIsolation: true, nodeIntegration: false,
-      backgroundThrottling: false
-    }
-  });
-  await win.loadFile(path.join(root, 'src', 'index.html'));
-  await new Promise((r) => setTimeout(r, 900));
+  const win = createTestWindow({ root });
+  await new Promise((r) => setTimeout(r, 1200));
 
   const truth = JSON.parse(fs.readFileSync(path.join(root, 'testdata', 'sample3-truth.json'), 'utf8'));
   const png = fs.readFileSync(path.join(root, 'testdata', 'sample3.png'));

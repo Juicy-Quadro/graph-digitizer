@@ -1,14 +1,80 @@
 'use strict';
 
-const { app, BrowserWindow, Menu, dialog, ipcMain, clipboard, shell, nativeTheme } = require('electron');
+const { app, BrowserWindow, Menu, dialog, ipcMain, clipboard, shell, nativeTheme, protocol } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
 const isDev = !app.isPackaged;
 
+/**
+ * The renderer is served from a custom scheme instead of file://. Under
+ * file:// the CSP source 'self' matches every local file, so the policy could
+ * not keep the renderer inside the application.
+ */
+const APP_SCHEME = 'app';
+const APP_HOST = 'gd';
+const APP_ORIGIN = APP_SCHEME + '://' + APP_HOST;
+
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: APP_SCHEME,
+    privileges: { standard: true, secure: true, supportFetchAPI: true }
+  }
+]);
+
+const MIME_TYPES = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon'
+};
+
+function registerAppProtocol() {
+  const base = path.resolve(path.join(__dirname, '..', 'src'));
+  protocol.handle(APP_SCHEME, (request) => {
+    let rel = decodeURIComponent(new URL(request.url).pathname);
+    if (!rel || rel === '/') rel = '/index.html';
+    const filePath = path.resolve(path.join(base, rel));
+    // Never serve anything outside the renderer directory.
+    if (filePath !== base && !filePath.startsWith(base + path.sep)) {
+      return new Response('Forbidden', { status: 403 });
+    }
+    try {
+      const data = fs.readFileSync(filePath);
+      const type = MIME_TYPES[path.extname(filePath).toLowerCase()] || 'application/octet-stream';
+      return new Response(data, { headers: { 'Content-Type': type } });
+    } catch (err) {
+      return new Response('Not found', { status: 404 });
+    }
+  });
+}
+
+/**
+ * The renderer exposes a test hook only when this switch is present, so it
+ * never ships in a normal installation.
+ */
+const testHookEnabled = process.env.GD_TEST_HOOK === '1';
+
 let mainWindow = null;
 let currentLanguage = 'en';
 let currentTheme = 'auto';
+
+/**
+ * Folders the user has explicitly opened through a native dialog. Only files
+ * below these roots may be read back by the renderer.
+ */
+const approvedReadRoots = new Set();
+
+function approveRoot(filePath) {
+  if (filePath) approvedReadRoots.add(path.resolve(path.dirname(filePath)));
+}
 
 /** @type {BrowserWindow|null} */
 function createWindow() {
@@ -31,11 +97,12 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false
+      sandbox: false,
+      additionalArguments: testHookEnabled ? ['--gd-test-hook'] : []
     }
   });
 
-  mainWindow.loadFile(path.join(__dirname, '..', 'src', 'index.html'));
+  mainWindow.loadURL(APP_ORIGIN + '/index.html' + (testHookEnabled ? '?testhook=1' : ''));
 
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
@@ -50,8 +117,11 @@ function createWindow() {
   });
 
   if (isDev) {
-    mainWindow.webContents.on('did-finish-load', () => {
-      mainWindow.webContents.openDevTools({ mode: 'detach' });
+    // Bind to this window, not to the module level variable, so a closed
+    // window cannot make the handler touch a different one.
+    const own = mainWindow;
+    own.webContents.on('did-finish-load', () => {
+      if (!own.isDestroyed()) own.webContents.openDevTools({ mode: 'detach' });
     });
   }
 }
@@ -71,6 +141,7 @@ ipcMain.handle('image:open', async () => {
   });
   if (result.canceled || !result.filePaths.length) return null;
   const filePath = result.filePaths[0];
+  approveRoot(filePath);
   const buffer = fs.readFileSync(filePath);
   return {
     path: filePath,
@@ -80,18 +151,21 @@ ipcMain.handle('image:open', async () => {
   };
 });
 
-ipcMain.handle('file:readText', async (_evt, filePath) => {
-  try {
-    return fs.readFileSync(filePath, 'utf8');
-  } catch (err) {
-    throw new Error(String(err && err.message ? err.message : err));
-  }
-});
-
 ipcMain.handle('file:readBinary', async (_evt, filePath) => {
   try {
-    if (!filePath || !fs.existsSync(filePath)) return null;
-    return fs.readFileSync(filePath).toString('base64');
+    if (!filePath || typeof filePath !== 'string') return null;
+    const resolved = path.resolve(filePath);
+    // The renderer may only read files the user has already opened through a
+    // native dialog; a workspace file must not be able to point anywhere.
+    const allowed = [...approvedReadRoots].some((root) => {
+      const rel = path.relative(root, resolved);
+      return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+    });
+    if (!allowed) {
+      throw new Error('The file is outside the folders that were opened by the user.');
+    }
+    if (!fs.existsSync(resolved)) return null;
+    return fs.readFileSync(resolved).toString('base64');
   } catch (err) {
     throw new Error(String(err && err.message ? err.message : err));
   }
@@ -105,6 +179,7 @@ ipcMain.handle('file:readTextOpen', async () => {
   });
   if (result.canceled || !result.filePaths.length) return null;
   const filePath = result.filePaths[0];
+  approveRoot(filePath);
   try {
     return { path: filePath, name: path.basename(filePath), content: fs.readFileSync(filePath, 'utf8') };
   } catch (err) {
@@ -174,7 +249,12 @@ function buildMenu(language, theme) {
         { label: lang === 'zh' ? '撤销(&U)' : 'Undo(&U)', accelerator: 'CmdOrCtrl+Z', click: () => send('undo') },
         { label: lang === 'zh' ? '重做(&R)' : 'Redo(&R)', accelerator: 'CmdOrCtrl+Y', click: () => send('redo') },
         { type: 'separator' },
-        { label: lang === 'zh' ? '删除选中的点(&D)' : 'Delete Points(&D)', accelerator: 'Delete', click: () => send('delete-points') },
+        {
+          // The renderer implements Delete with a guard for text fields, so
+          // the native accelerator must not swallow the key as well.
+          label: lang === 'zh' ? '删除选中的点(&D)' : 'Delete Points(&D)',
+          click: () => send('delete-points')
+        },
         { label: lang === 'zh' ? '全选(&A)' : 'Select All(&A)', accelerator: 'CmdOrCtrl+A', click: () => send('select-all') }
       ]
     },
@@ -253,14 +333,29 @@ function buildMenu(language, theme) {
 }
 
 ipcMain.on('menu:language', (_evt, language) => {
-  currentLanguage = language;
-  buildMenu(currentLanguage, currentTheme);
+  currentLanguage = language === 'zh' ? 'zh' : 'en';
+  scheduleMenuRebuild();
 });
 
 ipcMain.on('menu:theme', (_evt, theme) => {
-  currentTheme = theme;
-  buildMenu(currentLanguage, currentTheme);
+  currentTheme = ['auto', 'dark', 'light'].indexOf(theme) >= 0 ? theme : 'auto';
+  scheduleMenuRebuild();
 });
+
+/**
+ * A language change and a theme change usually arrive together, and each
+ * rebuild replaces the whole menu. Coalesce them into one rebuild so the
+ * menu bar does not flicker twice.
+ */
+let menuRebuildTimer = null;
+
+function scheduleMenuRebuild() {
+  if (menuRebuildTimer) clearTimeout(menuRebuildTimer);
+  menuRebuildTimer = setTimeout(() => {
+    menuRebuildTimer = null;
+    buildMenu(currentLanguage, currentTheme);
+  }, 40);
+}
 
 ipcMain.on('titlebar:color', (_evt, background, symbol) => {
   if (!mainWindow || mainWindow.isDestroyed()) return;
@@ -300,6 +395,7 @@ setInterval(() => pushSystemTheme(false), 1000).unref();
 // ------------------------------------------------------------------ Boot
 
 app.whenReady().then(() => {
+  registerAppProtocol();
   buildMenu(currentLanguage, currentTheme);
   createWindow();
 

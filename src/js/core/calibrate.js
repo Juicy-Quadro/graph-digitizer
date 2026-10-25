@@ -1,20 +1,26 @@
 /*
  * Four-point calibration.
  *
- * The user marks four image points and assigns each a logical value:
- *   Xmin / Xmax  -> the two ends of the horizontal (X) axis
- *   Ymin / Ymax  -> the two ends of the vertical (Y) axis
+ * The user marks four points on the figure and assigns each a logical value:
+ *   Xmin / Xmax  the two ends of the horizontal (X) axis
+ *   Ymin / Ymax  the two ends of the vertical (Y) axis
  *
- * The two axes do not have to be perpendicular and do not have to be
- * axis-aligned in image space, so the mapping is built as a general affine
- * transform derived from the two axis vectors:
+ * The mapping is an affine decomposition of the image plane onto the two axis
+ * directions:
  *
- *   u = ((p - Xmin) . ax) / (ax . ax)      -> normalised position along X
- *   v = ((p - Ymin) . ay) / (ay . ay)      -> normalised position along Y
+ *       p = origin + s * ax + t * ay
  *
- * and the logical value is the interpolation of the two axis values at that
- * normalised position. Logarithmic axes are handled by interpolating in log
- * space, which keeps the transform affine in the linearised domain.
+ * where ax = Xmax - Xmin and ay = Ymax - Ymin. The logical X is the
+ * interpolation of the two X values over the range of s that Xmin and Xmax
+ * cover, and the logical Y is the same for the Y axis.
+ *
+ * Using the basis decomposition (rather than projecting a pixel onto each
+ * axis) is what makes tilted and non-orthogonal axes behave: the projection
+ * and the basis disagree as soon as the axes are not perpendicular, and the
+ * basis is the one that reproduces the reference data.
+ *
+ * Because both axes are decomposed against the SAME origin, the choice of
+ * origin cancels out of the final logical values.
  */
 (function (root) {
   'use strict';
@@ -26,11 +32,25 @@
     X_COINCIDE: 'x_coincide',
     Y_COINCIDE: 'y_coincide',
     COLLINEAR: 'collinear',
-    LOG_NEGATIVE: 'log_negative'
+    LOG_NEGATIVE: 'log_negative',
+    LOG_ZERO_SPAN: 'log_zero_span'
   };
 
-  /** A 1-D scale mapping a normalised parameter to a logical value. */
-  function makeScale(kind, v0, v1) {
+  /**
+   * A 1-D scale that maps a parameter range onto a value range.
+   *
+   * @param {string} kind   'linear' or 'log'
+   * @param {number} v0     value at the low end of the parameter range
+   * @param {number} v1     value at the high end
+   * @param {number} [p0]   parameter at the low end (default 0)
+   * @param {number} [p1]   parameter at the high end (default 1)
+   */
+  function makeScale(kind, v0, v1, p0, p1) {
+    const lo = p0 === undefined ? 0 : p0;
+    const hi = p1 === undefined ? 1 : p1;
+    const span = hi - lo;
+    const norm = (x) => (span === 0 ? 0 : (x - lo) / span);
+
     if (kind === 'log') {
       const l0 = Math.log(v0);
       const l1 = Math.log(v1);
@@ -38,16 +58,16 @@
         kind: 'log',
         v0: v0,
         v1: v1,
-        toValue: (t) => Math.exp(l0 + t * (l1 - l0)),
-        toParam: (value) => (Math.log(value) - l0) / (l1 - l0)
+        toValue: (x) => Math.exp(l0 + norm(x) * (l1 - l0)),
+        toParam: (value) => lo + ((Math.log(value) - l0) / (l1 - l0)) * span
       };
     }
     return {
       kind: 'linear',
       v0: v0,
       v1: v1,
-      toValue: (t) => v0 + t * (v1 - v0),
-      toParam: (value) => (v1 === v0 ? 0 : (value - v0) / (v1 - v0))
+      toValue: (x) => v0 + norm(x) * (v1 - v0),
+      toParam: (value) => lo + ((v1 === v0 ? 0 : (value - v0) / (v1 - v0))) * span
     };
   }
 
@@ -76,6 +96,12 @@
     if (yScaleKind === 'log' && (p.ymin.value <= 0 || p.ymax.value <= 0)) {
       return { ok: false, error: CalibrationError.LOG_NEGATIVE, axis: 'y' };
     }
+    if (xScaleKind === 'log' && p.xmin.value === p.xmax.value) {
+      return { ok: false, error: CalibrationError.LOG_ZERO_SPAN, axis: 'x' };
+    }
+    if (yScaleKind === 'log' && p.ymin.value === p.ymax.value) {
+      return { ok: false, error: CalibrationError.LOG_ZERO_SPAN, axis: 'y' };
+    }
 
     const ax = { x: p.xmax.x - p.xmin.x, y: p.xmax.y - p.xmin.y };
     const ay = { x: p.ymax.x - p.ymin.x, y: p.ymax.y - p.ymin.y };
@@ -85,14 +111,28 @@
     if (axLenSq < 1e-6) return { ok: false, error: CalibrationError.X_COINCIDE };
     if (ayLenSq < 1e-6) return { ok: false, error: CalibrationError.Y_COINCIDE };
 
-    const sinAngle = Math.abs(ax.x * ay.y - ax.y * ay.x) / Math.sqrt(axLenSq * ayLenSq);
-    if (sinAngle < 1e-6) return { ok: false, error: CalibrationError.COLLINEAR };
+    const det = ax.x * ay.y - ay.x * ax.y;
+    if (Math.abs(det) < 1e-9) {
+      const sinAngle = Math.abs(det) / Math.sqrt(axLenSq * ayLenSq);
+      if (sinAngle < 1e-6) return { ok: false, error: CalibrationError.COLLINEAR };
+    }
 
-    const xScale = makeScale(xScaleKind, p.xmin.value, p.xmax.value);
-    const yScale = makeScale(yScaleKind, p.ymin.value, p.ymax.value);
+    // Shared origin of the affine decomposition. Any point works, because the
+    // shift cancels out of the interpolated values.
+    const origin = { x: p.xmin.x, y: p.xmin.y };
 
-    const rhsX = p.xmin.x * ax.x + p.xmin.y * ax.y;
-    const rhsY = p.ymin.x * ay.x + p.ymin.y * ay.y;
+    /** Coefficient of `pt` along ax. */
+    const sOf = (pt) => ((pt.x - origin.x) * ay.y - (pt.y - origin.y) * ay.x) / det;
+    /** Coefficient of `pt` along ay. */
+    const tOf = (pt) => (ax.x * (pt.y - origin.y) - ax.y * (pt.x - origin.x)) / det;
+
+    const sXmin = sOf(p.xmin);
+    const sXmax = sOf(p.xmax);
+    const tYmin = tOf(p.ymin);
+    const tYmax = tOf(p.ymax);
+
+    const xScale = makeScale(xScaleKind, p.xmin.value, p.xmax.value, sXmin, sXmax);
+    const yScale = makeScale(yScaleKind, p.ymin.value, p.ymax.value, tYmin, tYmax);
 
     const calib = {
       ok: true,
@@ -100,38 +140,37 @@
       points: p,
       xScale: xScale,
       yScale: yScale,
+      origin: origin,
       axisX: { origin: { x: p.xmin.x, y: p.xmin.y }, vector: ax, length: Math.sqrt(axLenSq) },
       axisY: { origin: { x: p.ymin.x, y: p.ymin.y }, vector: ay, length: Math.sqrt(ayLenSq) },
 
       /** Image pixel -> logical coordinates. */
       toLogical(px, py) {
-        const u = ((px * ax.x + py * ax.y) - rhsX) / axLenSq;
-        const v = ((px * ay.x + py * ay.y) - rhsY) / ayLenSq;
-        return { x: xScale.toValue(u), y: yScale.toValue(v) };
+        const s = sOf({ x: px, y: py });
+        const t = tOf({ x: px, y: py });
+        return { x: xScale.toValue(s), y: yScale.toValue(t) };
       },
 
-      /** Logical coordinates -> image pixel (inverse affine). */
+      /** Logical coordinates -> image pixel (the inverse affine map). */
       toPixel(lx, ly) {
-        const u = xScale.toParam(lx);
-        const v = yScale.toParam(ly);
-        const det = ax.x * ay.y - ay.x * ax.y;
-        const b1 = u * axLenSq + rhsX;
-        const b2 = v * ayLenSq + rhsY;
+        const s = xScale.toParam(lx);
+        const t = yScale.toParam(ly);
         return {
-          x: (b1 * ay.y - b2 * ax.y) / det,
-          y: (ax.x * b2 - ay.x * b1) / det
+          x: origin.x + ax.x * s + ay.x * t,
+          y: origin.y + ax.y * s + ay.y * t
         };
       },
 
       /**
        * The image-space line on which the logical X value is constant.
-       * It is parallel to the Y axis and anchored on the X axis.
+       * It runs parallel to the Y axis, through the X axis at the matching
+       * position.
        */
       lineOfConstantX(lx) {
-        const u = xScale.toParam(lx);
+        const s = xScale.toParam(lx);
         const anchor = {
-          x: p.xmin.x + ax.x * u,
-          y: p.xmin.y + ax.y * u
+          x: origin.x + ax.x * s,
+          y: origin.y + ax.y * s
         };
         const len = Math.sqrt(ayLenSq);
         return { origin: anchor, dir: { x: ay.x / len, y: ay.y / len } };
@@ -139,10 +178,10 @@
 
       /** The image-space line on which the logical Y value is constant. */
       lineOfConstantY(ly) {
-        const v = yScale.toParam(ly);
+        const t = yScale.toParam(ly);
         const anchor = {
-          x: p.ymin.x + ay.x * v,
-          y: p.ymin.y + ay.y * v
+          x: origin.x + ay.x * t,
+          y: origin.y + ay.y * t
         };
         const len = Math.sqrt(axLenSq);
         return { origin: anchor, dir: { x: ax.x / len, y: ax.y / len } };

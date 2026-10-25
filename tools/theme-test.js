@@ -7,9 +7,10 @@
  * light mode; the renderer has to react to the change on its own.
  */
 
-const { app, BrowserWindow, nativeTheme, session } = require('electron');
+const { app, nativeTheme, session } = require('electron');
 const path = require('path');
 const os = require('os');
+const { createTestWindow } = require('./lib/test-window');
 
 const root = path.join(__dirname, '..');
 let failures = 0;
@@ -28,18 +29,10 @@ app.disableHardwareAcceleration();
 app.whenReady().then(async () => {
   nativeTheme.themeSource = 'dark';
 
-  const win = new BrowserWindow({
-    width: 1200, height: 800, show: false,
-    webPreferences: {
-      preload: path.join(root, 'electron', 'preload.js'),
-      contextIsolation: true, nodeIntegration: false,
-      backgroundThrottling: false
-    }
-  });
+  const win = createTestWindow({ root, width: 1200, height: 800 });
 
   await session.defaultSession.clearStorageData();
-  await win.loadFile(path.join(root, 'src', 'index.html'));
-  await new Promise((r) => setTimeout(r, 900));
+  await new Promise((r) => setTimeout(r, 1400));
 
   const read = () => win.webContents.executeJavaScript(`({
     preference: window.__gd.store.state.ui.theme,

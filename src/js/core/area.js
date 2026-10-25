@@ -41,6 +41,10 @@
     minRun: 0.6
   };
 
+  // The sampling line is probed at most this far apart, so that a curve
+  // which is only one pixel wide cannot be stepped over.
+  const MAX_PROBE = 0.25;
+
   /**
    * Clip an infinite world-space line to a (possibly rotated) rectangle.
    * Uses the slab method so the line is clipped in both directions.
@@ -123,10 +127,14 @@
     // Pixel grid: lines perpendicular to one of the window axes.
     const vertical = opt.mode !== GridMode.LOGICAL_Y;
     const half = vertical ? rect.hw : rect.hh;
-    const start = -half + (offset % spacing);
-    const n = Math.floor((2 * half - start) / spacing);
-    for (let k = 0; k <= n; k++) {
-      const local = start + k * spacing;
+    const span = 2 * half;
+    // The grid is centred on the window so that the whole span is covered:
+    // anchoring it at the left edge would leave the rest of the window
+    // unsampled as soon as the spacing grows beyond the window width.
+    const count = Math.max(1, Math.floor(span / spacing) + 1);
+    const phase = offset % spacing;
+    for (let k = 0; k < count; k++) {
+      const local = (k - (count - 1) / 2) * spacing + phase;
       if (Math.abs(local) > half + 0.001) continue;
       const th = (rect.rotation * Math.PI) / 180;
       const localOrigin = vertical ? { x: local, y: 0 } : { x: 0, y: local };
@@ -167,11 +175,38 @@
       if (length <= 0) continue;
 
       const step = Math.max(0.15, opt.step);
-      const count = Math.max(1, Math.ceil(length / step));
+      // A probe never steps further than MAX_PROBE, otherwise a coarse
+      // step would jump over the curve and the crossing would be lost.
+      const probe = Math.min(step, MAX_PROBE);
+      const count = Math.max(1, Math.ceil(length / probe));
       const at = (t) => ({
         x: seg.origin.x + seg.dir.x * t,
         y: seg.origin.y + seg.dir.y * t
       });
+
+      /** Does the pixel the sampling line passes at t belong to the curve? */
+      const hitAt = (t) => {
+        const p = at(t);
+        const px = Math.round(p.x);
+        const py = Math.round(p.y);
+        if (px < 0 || py < 0 || px >= w || py >= h) return false;
+        return !!mask[py * w + px];
+      };
+
+      /**
+       * Position where the sampling line enters the curve: interpolated
+       * between the last miss and the first hit instead of taken from the
+       * rounded sample.
+       */
+      const boundary = (miss, hit) => {
+        let lo = miss;
+        let hi = hit;
+        for (let i = 0; i < 12; i++) {
+          const mid = (lo + hi) / 2;
+          if (hitAt(mid)) hi = mid; else lo = mid;
+        }
+        return hi;
+      };
 
       /**
        * Record one intersection. A run is valid when it covers at least one
@@ -196,52 +231,50 @@
           y: logical.y,
           gridIndex: li,
           gridValue: g.value,
-          runLength: Math.hypot(p1.x - p0.x, p1.y - p0.y)
+          runLength: Math.hypot(p1.x - p0.x, p1.y - p0.y),
+          // Position along the sampling line, so that the crossings of a
+          // single line can be ordered by their projection.
+          along: (chosen.x - seg.origin.x) * seg.dir.x + (chosen.y - seg.origin.y) * seg.dir.y
         });
       };
 
       let runStart = null;
       let runEnd = null;
-      let runHits = 0;
       let runPixels = 0;
       const seenPixels = new Set();
+      let prevT = null;
       for (let i = 0; i <= count; i++) {
         const t = seg.t0 + (length * i) / count;
-        const p = at(t);
-        const px = Math.round(p.x);
-        const py = Math.round(p.y);
-        const inside = px >= 0 && py >= 0 && px < w && py < h;
-        const hit = inside ? !!mask[py * w + px] : false;
+        const hit = hitAt(t);
         if (hit) {
-          const key = py * w + px;
           if (runStart === null) {
-            runStart = t;
+            runStart = prevT === null ? t : boundary(prevT, t);
             runEnd = t;
-            runHits = 0;
             runPixels = 0;
             seenPixels.clear();
           }
+          const p = at(t);
+          const key = Math.round(p.y) * w + Math.round(p.x);
           if (!seenPixels.has(key)) {
             seenPixels.add(key);
             runPixels++;
           }
           runEnd = t;
-          runHits++;
         } else if (runStart !== null) {
-          emitRun(runStart, runEnd, runPixels);
+          emitRun(runStart, boundary(t, prevT), runPixels);
           runStart = null;
           runEnd = null;
-          runHits = 0;
           runPixels = 0;
           seenPixels.clear();
         }
+        prevT = t;
       }
       if (runStart !== null) {
         emitRun(runStart, runEnd, runPixels);
       }
     }
 
-    results.sort((a, b) => (a.gridIndex - b.gridIndex) || (a.px - b.px));
+    results.sort((a, b) => (a.gridIndex - b.gridIndex) || (a.along - b.along));
     return results;
   }
 

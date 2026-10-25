@@ -150,22 +150,27 @@
       if (points.length < 2) return points.slice();
       if (!spacing || spacing <= 0) return points.slice();
       const out = [points[0]];
-      let carry = 0;
+      // Samples sit on whole multiples of the spacing counted from the first
+      // vertex, so the first vertex is never emitted a second time.
+      let walked = 0;
       for (let i = 1; i < points.length; i++) {
         const a = points[i - 1];
         const b = points[i];
-        let seg = Geometry.dist(a, b);
+        const seg = Geometry.dist(a, b);
         if (seg === 0) continue;
-        let t0 = carry / seg;
-        while (t0 <= 1) {
-          out.push({ x: a.x + (b.x - a.x) * t0, y: a.y + (b.y - a.y) * t0 });
-          t0 += spacing / seg;
+        const segEnd = walked + seg;
+        let target = (Math.floor(walked / spacing) + 1) * spacing;
+        while (target < segEnd) {
+          const t = (target - walked) / seg;
+          out.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+          target += spacing;
         }
-        carry = (carry + seg) % spacing;
+        walked = segEnd;
       }
+      // The last vertex belongs to the curve and has to survive the resampling.
       const last = points[points.length - 1];
       const tail = out[out.length - 1];
-      if (Geometry.dist(tail, last) > spacing * 0.35) out.push(last);
+      if (Geometry.dist(tail, last) > 1e-9) out.push(last);
       return out;
     },
 
@@ -173,7 +178,11 @@
     num(v, decimals) {
       if (!isFinite(v)) return '0';
       const s = v.toFixed(decimals);
-      return s.replace(/\.?0+$/, '') || '0';
+      // Trailing zeros are only noise when the value really has a decimal
+      // part; otherwise 100 would collapse to "1".
+      if (s.indexOf('.') < 0) return s;
+      const trimmed = s.replace(/\.?0+$/, '');
+      return trimmed === '' || trimmed === '-' ? '0' : trimmed;
     }
   };
 

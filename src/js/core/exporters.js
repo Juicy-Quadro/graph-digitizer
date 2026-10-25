@@ -25,6 +25,22 @@
     EPS: 'eps'
   };
 
+  /** A point is usable only when both logical coordinates are real numbers. */
+  function isUsablePoint(p) {
+    return !!p &&
+      p.x !== null && p.x !== undefined && isFinite(p.x) &&
+      p.y !== null && p.y !== undefined && isFinite(p.y);
+  }
+
+  /** The points of one series that carry a usable measurement. */
+  function finitePoints(points) {
+    const out = [];
+    for (const p of points || []) {
+      if (isUsablePoint(p)) out.push(p);
+    }
+    return out;
+  }
+
   function allPoints(data) {
     const out = [];
     for (const line of data.lines || []) {
@@ -34,7 +50,7 @@
   }
 
   function logicalBounds(data) {
-    const pts = allPoints(data);
+    const pts = allPoints(data).filter(isUsablePoint);
     if (!pts.length) return null;
     let minX = Infinity;
     let maxX = -Infinity;
@@ -60,9 +76,25 @@
       .replace(/'/g, '&apos;');
   }
 
+  /** Clamp the number of decimals to the range toFixed() accepts. */
+  function clampDecimals(decimals) {
+    if (decimals === undefined || decimals === null) return 6;
+    const n = Math.floor(Number(decimals));
+    if (!isFinite(n)) return 6;
+    return Math.max(0, Math.min(100, n));
+  }
+
   function fmt(v, decimals) {
-    if (!isFinite(v)) return '0';
-    return Number(v).toFixed(decimals === undefined ? 6 : decimals);
+    // A missing measurement must not look like a real zero, so a non-finite
+    // value is left empty instead of being formatted as a number.
+    if (v === null || v === undefined || !isFinite(v)) return '';
+    return Number(v).toFixed(clampDecimals(decimals));
+  }
+
+  /** A number for JSON output; a missing measurement stays null. */
+  function jsonNum(v, decimals) {
+    if (v === null || v === undefined || !isFinite(v)) return null;
+    return Number(fmt(v, decimals));
   }
 
   // ------------------------------------------------------------------ CSV
@@ -74,13 +106,20 @@
     const rows = [];
     const lines = data.lines || [];
     if (lines.length > 1) {
-      lines.forEach((line, i) => {
-        rows.push([line.name || ('Series ' + (i + 1))]);
-      });
-      rows.push([]);
+      // Every series contributes an X and a Y column, so the names have to
+      // be laid out over the same columns as the data.
+      const names = [];
+      for (let i = 0; i < lines.length; i++) {
+        names.push(lines[i].name || ('Series ' + (i + 1)), '');
+      }
+      rows.push(names);
     }
     const header = opt.withHeader !== false;
-    if (header) rows.push(['X', 'Y']);
+    if (header) {
+      const cols = [];
+      for (const line of lines) cols.push('X', 'Y');
+      rows.push(cols.length ? cols : ['X', 'Y']);
+    }
     const longest = Math.max(0, ...lines.map((l) => (l.points || []).length));
     for (let i = 0; i < longest; i++) {
       const row = [];
@@ -106,10 +145,16 @@
     const out = [];
     if (opt.withHeader !== false) {
       if (lines.length > 1) {
-        out.push(lines.map((l) => l.name || '').join(sep));
-        out.push(lines.map(() => '').join(sep));
+        // The names have to sit over the same columns as the data.
+        const names = [];
+        for (let i = 0; i < lines.length; i++) {
+          names.push(lines[i].name || ('Series ' + (i + 1)), '');
+        }
+        out.push(names.join(sep));
       }
-      out.push(['X', 'Y'].join(sep));
+      const cols = [];
+      for (const line of lines) cols.push('X', 'Y');
+      out.push((cols.length ? cols : ['X', 'Y']).join(sep));
     }
     const longest = Math.max(0, ...lines.map((l) => (l.points || []).length));
     for (let i = 0; i < longest; i++) {
@@ -135,23 +180,40 @@
     const header = opt.withHeader !== false;
     if (header) {
       if (lines.length > 1) {
-        rows += '<Row>' + lines.map((l) =>
-          `<Cell ss:StyleID="hdr"><Data ss:Type="String">${escapeXml(l.name || '')}</Data></Cell>`
-        ).join('') + '</Row>';
-        rows += '<Row>' + lines.map(() => '<Cell/>').join('') + '</Row>';
+        // One name cell per series, followed by an empty cell so the names
+        // line up with the X and Y columns of the data.
+        const nameCells = [];
+        for (let i = 0; i < lines.length; i++) {
+          nameCells.push(
+            `<Cell ss:StyleID="hdr"><Data ss:Type="String">${escapeXml(lines[i].name || ('Series ' + (i + 1)))}</Data></Cell>`,
+            '<Cell/>'
+          );
+        }
+        rows += '<Row>' + nameCells.join('') + '</Row>';
       }
-      rows += '<Row><Cell ss:StyleID="hdr"><Data ss:Type="String">X</Data></Cell>' +
-        '<Cell ss:StyleID="hdr"><Data ss:Type="String">Y</Data></Cell></Row>';
+      const headCells = [];
+      for (const line of lines) {
+        headCells.push(
+          '<Cell ss:StyleID="hdr"><Data ss:Type="String">X</Data></Cell>',
+          '<Cell ss:StyleID="hdr"><Data ss:Type="String">Y</Data></Cell>'
+        );
+      }
+      rows += '<Row>' + (headCells.length ? headCells.join('') :
+        '<Cell ss:StyleID="hdr"><Data ss:Type="String">X</Data></Cell>' +
+        '<Cell ss:StyleID="hdr"><Data ss:Type="String">Y</Data></Cell>') + '</Row>';
     }
     const longest = Math.max(0, ...lines.map((l) => (l.points || []).length));
     for (let i = 0; i < longest; i++) {
       rows += '<Row>';
       for (const line of lines) {
         const p = (line.points || [])[i];
-        rows += p
-          ? `<Cell><Data ss:Type="Number">${fmt(p.x, decimals)}</Data></Cell>` +
-            `<Cell><Data ss:Type="Number">${fmt(p.y, decimals)}</Data></Cell>`
-          : '<Cell/><Cell/>';
+        const cx = p && isFinite(p.x)
+          ? `<Cell><Data ss:Type="Number">${fmt(p.x, decimals)}</Data></Cell>`
+          : '<Cell/>';
+        const cy = p && isFinite(p.y)
+          ? `<Cell><Data ss:Type="Number">${fmt(p.y, decimals)}</Data></Cell>`
+          : '<Cell/>';
+        rows += cx + cy;
       }
       rows += '</Row>';
     }
@@ -180,7 +242,9 @@
     const decimals = opt.decimals === undefined ? 10 : opt.decimals;
     const lines = data.lines || [];
     const body = lines.map((line, li) => {
-      const pts = (line.points || []).map((p) =>
+      // A point without a real measurement would produce empty attributes,
+      // so only usable points are written.
+      const pts = finitePoints(line.points).map((p) =>
         `      <Point x="${fmt(p.x, decimals)}" y="${fmt(p.y, decimals)}"${
           p.px !== undefined ? ` px="${fmt(p.px, 2)}" py="${fmt(p.py, 2)}"` : ''
         }/>`
@@ -222,10 +286,10 @@ ${calibXml}${body}
         name: line.name || '',
         color: line.color || null,
         points: (line.points || []).map((p) => ({
-          x: Number(fmt(p.x, decimals)),
-          y: Number(fmt(p.y, decimals)),
-          px: p.px === undefined ? null : Number(fmt(p.px, 3)),
-          py: p.py === undefined ? null : Number(fmt(p.py, 3))
+          x: jsonNum(p.x, decimals),
+          y: jsonNum(p.y, decimals),
+          px: p.px === undefined ? null : jsonNum(p.px, 3),
+          py: p.py === undefined ? null : jsonNum(p.py, 3)
         }))
       }))
     };
@@ -234,33 +298,66 @@ ${calibXml}${body}
 
   // ------------------------------------------------------------------ SVG
 
+  /**
+   * The series that can actually be drawn, together with the bounds of the
+   * transformed coordinates. A logarithmic axis turns a non-positive value
+   * into a non-finite number, so the check happens after the transform.
+   */
+  function drawableSeries(data, tx, ty) {
+    const series = [];
+    for (const line of data.lines || []) {
+      const pts = [];
+      for (const p of line.points || []) {
+        if (!isUsablePoint(p)) continue;
+        const x = tx(p.x);
+        const y = ty(p.y);
+        if (!isFinite(x) || !isFinite(y)) continue;
+        pts.push(p);
+      }
+      if (pts.length) series.push({ name: line.name || '', color: line.color || null, points: pts });
+    }
+    if (!series.length) return { series: [], bounds: null };
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+    for (const s of series) {
+      for (const p of s.points) {
+        const x = tx(p.x);
+        const y = ty(p.y);
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+    }
+    if (minX === maxX) maxX = minX + 1;
+    if (minY === maxY) maxY = minY + 1;
+    return { series, bounds: { minX, maxX, minY, maxY } };
+  }
+
   function toSVG(data, options) {
     const opt = options || {};
     const width = opt.width || 900;
     const height = opt.height || 600;
     const pad = opt.padding || 70;
-    const bounds = logicalBounds(data);
-    if (!bounds) {
-      return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"/>`;
-    }
     const logX = data.calibration && data.calibration.xScale === 'log';
     const logY = data.calibration && data.calibration.yScale === 'log';
     const tx = (v) => (logX ? Math.log(v) : v);
     const ty = (v) => (logY ? Math.log(v) : v);
+    const drawn = drawableSeries(data, tx, ty);
+    const bounds = drawn.bounds;
+    if (!bounds) {
+      return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"/>`;
+    }
 
-    const b = {
-      minX: tx(bounds.minX),
-      maxX: tx(bounds.maxX),
-      minY: ty(bounds.minY),
-      maxY: ty(bounds.maxY)
-    };
+    const b = bounds;
     const sx = (v) => pad + ((tx(v) - b.minX) / (b.maxX - b.minX)) * (width - 2 * pad);
     const sy = (v) => height - pad - ((ty(v) - b.minY) / (b.maxY - b.minY)) * (height - 2 * pad);
 
     const palette = ['#2563eb', '#dc2626', '#059669', '#d97706', '#7c3aed', '#0891b2'];
-    const body = (data.lines || []).map((line, i) => {
-      const pts = line.points || [];
-      if (!pts.length) return '';
+    const body = drawn.series.map((line, i) => {
+      const pts = line.points;
       const d = pts.map((p, k) => `${k ? 'L' : 'M'}${sx(p.x).toFixed(2)},${sy(p.y).toFixed(2)}`).join(' ');
       const color = line.color || palette[i % palette.length];
       const label = line.name
@@ -308,7 +405,9 @@ ${body}
     push(0, 'SECTION');
     push(2, 'ENTITIES');
     (data.lines || []).forEach((line) => {
-      const pts = line.points || [];
+      // A vertex without a real measurement would be written as a literal
+      // NaN, which makes the whole DXF unreadable, so it is dropped.
+      const pts = finitePoints(line.points);
       if (!pts.length) return;
       push(0, 'POLYLINE');
       push(8, '0');
@@ -333,12 +432,20 @@ ${body}
   function toEPS(data, options) {
     const opt = options || {};
     const decimals = opt.decimals === undefined ? 6 : opt.decimals;
-    const bounds = logicalBounds(data) || { minX: 0, maxX: 1, minY: 0, maxY: 1 };
     const widthPt = 540;
     const heightPt = 360;
     const padPt = 40;
-    const sx = (v) => padPt + ((v - bounds.minX) / (bounds.maxX - bounds.minX)) * (widthPt - 2 * padPt);
-    const sy = (v) => padPt + ((v - bounds.minY) / (bounds.maxY - bounds.minY)) * (heightPt - 2 * padPt);
+    // A logarithmic axis has to be spaced in log space, the same way the
+    // SVG exporter does it, otherwise the curve is drawn with the log
+    // values spread out linearly.
+    const logX = data.calibration && data.calibration.xScale === 'log';
+    const logY = data.calibration && data.calibration.yScale === 'log';
+    const tx = (v) => (logX ? Math.log(v) : v);
+    const ty = (v) => (logY ? Math.log(v) : v);
+    const drawn = drawableSeries(data, tx, ty);
+    const b = drawn.bounds || { minX: 0, maxX: 1, minY: 0, maxY: 1 };
+    const sx = (v) => padPt + ((tx(v) - b.minX) / (b.maxX - b.minX)) * (widthPt - 2 * padPt);
+    const sy = (v) => padPt + ((ty(v) - b.minY) / (b.maxY - b.minY)) * (heightPt - 2 * padPt);
     const out = [];
     out.push('%!PS-Adobe-3.0 EPSF-3.0');
     out.push(`%%BoundingBox: 0 0 ${widthPt} ${heightPt}`);
@@ -352,9 +459,8 @@ ${body}
     out.push('%%EndProlog');
     out.push('1 setlinecap 1 setlinejoin');
     const palette = ['0.1 0.3 0.8', '0.8 0.15 0.15', '0.05 0.55 0.35', '0.8 0.5 0.1'];
-    (data.lines || []).forEach((line, i) => {
-      const pts = line.points || [];
-      if (!pts.length) return;
+    drawn.series.forEach((line, i) => {
+      const pts = line.points;
       const rgb = palette[i % palette.length];
       out.push(`${rgb} r`);
       out.push('1.2 setlinewidth');

@@ -121,11 +121,24 @@
       store.pushUndo();
       const s = store.state;
       const series = s.series.slice();
-      const points = series[s.activeSeries].points.map((p, i) => (
-        i === index ? Object.assign({}, p, { [field]: value }) : p
-      ));
-      // Keep the pair consistent: editing X moves the point, editing Y moves it too.
-      store.setSeriesPoints(s.activeSeries, points);
+      const points = series[s.activeSeries].points.slice();
+      const p = points[index];
+      const next = { x: p.x, y: p.y };
+      next[field] = value;
+      // Move the marker with the number: the canvas draws from the pixel
+      // position, so it has to follow the edited value.
+      let px = p.px;
+      let py = p.py;
+      if (calibration && calibration.ok && p.px !== undefined && p.py !== undefined) {
+        const back = calibration.toPixel(next.x, next.y);
+        px = back.x;
+        py = back.y;
+      }
+      points[index] = Object.assign({}, p, { x: next.x, y: next.y, px: px, py: py });
+      series[s.activeSeries] = Object.assign({}, series[s.activeSeries], { points: points });
+      store.set({ series: series });
+      renderSeriesTabs();
+      renderTable();
     }
   });
 
@@ -321,6 +334,18 @@
   function scheduleMaskUpdate() {
     if (maskTimer) clearTimeout(maskTimer);
     maskTimer = setTimeout(recomputeMask, 90);
+  }
+
+  /**
+   * Apply a pending sampling change right now. Without this the tracer can
+   * run against the mask the user was looking at before they changed a
+   * parameter.
+   */
+  function flushMaskUpdate() {
+    if (!maskTimer) return;
+    clearTimeout(maskTimer);
+    maskTimer = null;
+    recomputeMask();
   }
 
   function recomputeMask() {
@@ -640,10 +665,12 @@
     if (store.state.ui.tool !== 'area' || !areaDrag) return;
     const rect = rectFromDrag(areaDrag.start, payload.image, store.state.area.rotation);
     areaDrag = null;
+    // One gesture, one undo entry: the snapshot covers both the region and
+    // the points it produces.
     store.pushUndo();
     store.setIn('area', { region: rect });
     canvasView.setArea(rect, areaOptions());
-    runAreaSampling();
+    runAreaSampling(false);
   }
 
   function areaOptions() {
@@ -686,6 +713,7 @@
       toast(t('msg.noImage'), 'error');
       return;
     }
+    flushMaskUpdate();
     if (!maskInfo) recomputeMask();
 
     const s = store.state.trace;
@@ -723,18 +751,24 @@
     store.pushUndo();
     store.setSeriesPoints(store.state.activeSeries, pts);
     toast(t('msg.traced', { n: pts.length }), 'ok');
+    if (result.truncated) {
+      // The tracer stopped at a safety limit; the curve is incomplete and
+      // the user has to know.
+      toast(t('msg.truncated', { n: pts.length }), 'error');
+    }
   }
 
-  function runAreaSampling() {
+  function runAreaSampling(recordUndo) {
     const region = store.state.area.region;
     if (!region) return;
+    flushMaskUpdate();
     if (!maskInfo) recomputeMask();
     const results = Area.digitizeArea(maskInfo, region, calibration, areaOptions());
     if (!results.length) {
       toast(t('msg.noCurve'), 'error');
       return;
     }
-    store.pushUndo();
+    if (recordUndo !== false) store.pushUndo();
     store.setSeriesPoints(store.state.activeSeries, results);
     toast(t('msg.areaDone', { n: results.length }), 'ok');
   }
@@ -847,8 +881,10 @@
 
   async function exportData() {
     const s = store.state;
-    const series = s.series[s.activeSeries];
-    if (!series || !series.points.length) {
+    // The payload contains every series, so the guard must ask whether any
+    // series holds data - not only the active one.
+    const hasData = s.series.some((line) => (line.points || []).length > 0);
+    if (!hasData) {
       toast(t('table.empty'), 'error');
       return;
     }
@@ -1026,6 +1062,8 @@
         const s = store.state.calibration;
         const points = Object.assign({}, s.points);
         if (!points[key]) return;
+        if (points[key].value === value) return;
+        store.pushUndo();
         points[key] = Object.assign({}, points[key], { value: value });
         store.setIn('calibration', { points: points });
         buildCalibration();
@@ -1035,12 +1073,16 @@
     });
 
     el.calibXScale.addEventListener('change', () => {
+      if (el.calibXScale.value === store.state.calibration.xScale) return;
+      store.pushUndo();
       store.setIn('calibration', { xScale: el.calibXScale.value });
       buildCalibration();
       recomputePointValues();
       renderTable();
     });
     el.calibYScale.addEventListener('change', () => {
+      if (el.calibYScale.value === store.state.calibration.yScale) return;
+      store.pushUndo();
       store.setIn('calibration', { yScale: el.calibYScale.value });
       buildCalibration();
       recomputePointValues();
@@ -1090,6 +1132,8 @@
     // trace
     el.traceDirection.addEventListener('change', () => {
       store.setIn('trace', { direction: el.traceDirection.value });
+      // A pending first click belongs to the previous direction.
+      tracePending = null;
     });
     el.traceMaxGap.addEventListener('change', () => {
       store.setIn('trace', { maxGap: Number(el.traceMaxGap.value) || 0 });
@@ -1237,10 +1281,7 @@
 
   function doUndo() {
     if (store.undo()) {
-      buildCalibration();
-      recomputeMask();
-      renderSeriesTabs();
-      renderTable();
+      afterHistoryChange();
       toast(t('msg.undo'));
     } else {
       toast(t('msg.nothingToUndo'));
@@ -1249,12 +1290,42 @@
 
   function doRedo() {
     if (store.redo()) {
-      buildCalibration();
-      recomputeMask();
-      renderSeriesTabs();
-      renderTable();
+      afterHistoryChange();
       toast(t('msg.redo'));
     }
+  }
+
+  /**
+   * Everything that has to follow a restored history entry: the calibration
+   * markers, the sampling region on the canvas and the pending calibration
+   * step, which would otherwise point at the wrong axis end.
+   */
+  function afterHistoryChange() {
+    buildCalibration();
+    recomputeMask();
+    renderSeriesTabs();
+    renderTable();
+    canvasView.setArea(store.state.area.region, areaOptions());
+    syncCalibStep();
+  }
+
+  /** Recompute which calibration point is expected next. */
+  function syncCalibStep() {
+    const points = store.state.calibration.points;
+    const placed = CALIB_ORDER.filter((key) => points[key]);
+    if (placed.length === 0) {
+      calibPending = null;
+      canvasView.setCalibMode(null);
+    } else if (placed.length >= CALIB_ORDER.length) {
+      calibPending = null;
+      canvasView.setCalibMode(null);
+    } else {
+      // Find the first missing point in the expected order.
+      const next = CALIB_ORDER.find((key) => !points[key]);
+      calibPending = { key: next, step: placed.length };
+      canvasView.setCalibMode({ key: next });
+    }
+    renderCalibPanel();
   }
 
   function autoDetect() {
@@ -1306,6 +1377,29 @@
     t: 'trace', g: 'area', p: 'point', e: 'erase'
   };
 
+  /** Drop an image file straight onto the canvas. */
+  function wireDragAndDrop() {
+    const stop = (evt) => {
+      evt.preventDefault();
+      evt.stopPropagation();
+    };
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach((type) => {
+      el.stage.addEventListener(type, stop, false);
+    });
+    el.stage.addEventListener('drop', (evt) => {
+      const file = evt.dataTransfer && evt.dataTransfer.files && evt.dataTransfer.files[0];
+      if (!file) return;
+      if (!/^image\//.test(file.type)) {
+        toast(t('msg.noImage'), 'error');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => loadImageFromDataURL(reader.result, file.name, null);
+      reader.onerror = () => toast(t('msg.noImage'), 'error');
+      reader.readAsDataURL(file);
+    });
+  }
+
   function wireKeyboard() {
     window.addEventListener('keydown', (evt) => {
       const tag = (document.activeElement && document.activeElement.tagName) || '';
@@ -1313,7 +1407,12 @@
       const mod = evt.ctrlKey || evt.metaKey;
 
       if (mod) {
-        switch (evt.key.toLowerCase()) {
+        const key = evt.key.toLowerCase();
+        // While the user is typing, only the application level shortcuts stay
+        // active. Copy, select all and undo have to reach the text field.
+        const APP_LEVEL = ['o', 's', 'e', 'm', ','];
+        if (typing && APP_LEVEL.indexOf(key) < 0) return;
+        switch (key) {
           case 'z': evt.preventDefault(); evt.shiftKey ? doRedo() : doUndo(); return;
           case 'y': evt.preventDefault(); doRedo(); return;
           case 'o': evt.preventDefault(); openImage(); return;
@@ -1375,6 +1474,7 @@
 
     wireToolbar();
     wireKeyboard();
+    wireDragAndDrop();
 
     canvasView.on('click', handleClick);
     canvasView.on('drag', handleDrag);
@@ -1442,49 +1542,58 @@
     setTimeout(() => canvasView.resize(), 60);
 
     // Test hook. Lets an automated capture script drive the application
-    // without going through the native file dialogs.
-    window.__gd = {
-      store,
-      view,
-      GD,
-      setTool,
-      setLanguage,
-      setTheme,
-      applyTheme,
-      systemTheme,
-      lastSystemTheme: () => lastSystemTheme,
-      loadImage: loadImageFromDataURL,
-      calibration: () => calibration,
-      maskInfo: () => maskInfo,
-      recomputeMask,
-      setSampling(patch) {
-        store.setIn('sampling', patch);
-        el.sampleMethod.value = store.state.sampling.method;
-        el.sampleTolerance.value = Math.round(store.state.sampling.tolerance * 100);
-        el.tolValue.textContent = el.sampleTolerance.value + '%';
-        el.lineColor.value = rgbToHex(store.state.sampling.lineColor);
-        el.bgColor.value = rgbToHex(store.state.sampling.bgColor);
-        recomputeMask();
-      },
-      setCalibration(points, xScale, yScale) {
-        store.setIn('calibration', { points: points, xScale: xScale || 'linear', yScale: yScale || 'linear' });
-        buildCalibration();
-        recomputePointValues();
-        renderTable();
-      },
-      traceAt(x, y) {
-        setTool('trace');
-        handleClick({ image: { x: x, y: y } });
-      },
-      areaIn(x0, y0, x1, y1, rotation) {
-        setTool('area');
-        store.pushUndo();
-        const rect = rectFromDrag({ x: x0, y: y0 }, { x: x1, y: y1 }, rotation || 0);
-        store.setIn('area', { region: rect });
-        canvasView.setArea(rect, areaOptions());
-        runAreaSampling();
-      }
-    };
+    // without going through the native file dialogs. It is only exposed when
+    // the main process starts with GD_TEST_HOOK=1, so it never ships in a
+    // normal installation.
+    if (window.gd && window.gd.testHookAllowed) {
+      window.__gd = {
+          store,
+          view,
+          GD,
+          setTool,
+          setLanguage,
+          setTheme,
+          applyTheme,
+          systemTheme,
+        lastSystemTheme: () => lastSystemTheme,
+        loadImage: loadImageFromDataURL,
+        calibration: () => calibration,
+        maskInfo: () => maskInfo,
+        recomputeMask,
+        setSampling(patch) {
+          store.setIn('sampling', patch);
+          el.sampleMethod.value = store.state.sampling.method;
+          el.sampleTolerance.value = Math.round(store.state.sampling.tolerance * 100);
+          el.tolValue.textContent = el.sampleTolerance.value + '%';
+          el.lineColor.value = rgbToHex(store.state.sampling.lineColor);
+          el.bgColor.value = rgbToHex(store.state.sampling.bgColor);
+          recomputeMask();
+        },
+        setCalibration(points, xScale, yScale) {
+          store.pushUndo();
+          store.setIn('calibration', {
+            points: points,
+            xScale: xScale || 'linear',
+            yScale: yScale || 'linear'
+          });
+          buildCalibration();
+          recomputePointValues();
+          renderTable();
+        },
+        traceAt(x, y) {
+          setTool('trace');
+          handleClick({ image: { x: x, y: y } });
+        },
+        areaIn(x0, y0, x1, y1, rotation) {
+          setTool('area');
+          store.pushUndo();
+          const rect = rectFromDrag({ x: x0, y: y0 }, { x: x1, y: y1 }, rotation || 0);
+          store.setIn('area', { region: rect });
+          canvasView.setArea(rect, areaOptions());
+          runAreaSampling(false);
+        }
+      };
+    }
   }
 
   if (document.readyState === 'loading') {

@@ -39,7 +39,14 @@
     let areaOptions = null;
     let calibMode = null;        // { key, stage }
     let hoverPoint = -1;
-    let selected = new Set();
+    /*
+     * The table owns the selection. The canvas mirrors it per series so a
+     * stale index can never highlight a different point: the entry of a
+     * series is dropped as soon as its point list changes and the indices
+     * are clamped to the current point count.
+     */
+    const selectionBySeries = new Map();
+    const NO_SELECTION = new Set();
 
     const view = { zoom: 1, offsetX: 0, offsetY: 0 };
     let dpr = window.devicePixelRatio || 1;
@@ -303,11 +310,32 @@
       ctx.restore();
     }
 
+    /**
+     * The selection of one series, clamped to its current point count.
+     * Indices outside the range are dropped so a stale index can never
+     * highlight a different point.
+     */
+    function selectionFor(index) {
+      const set = selectionBySeries.get(index);
+      if (!set || !set.size) return NO_SELECTION;
+      const line = series[index];
+      const count = line ? (line.points || []).length : 0;
+      let clamped = null;
+      set.forEach((i) => {
+        if (i >= 0 && i < count) {
+          if (!clamped) clamped = new Set();
+          clamped.add(i);
+        }
+      });
+      return clamped || NO_SELECTION;
+    }
+
     function renderPoints(size) {
       const t = theme();
       ctx.save();
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       const palette = ['#4c8dff', '#f0625f', '#37c98b', '#f0b429', '#a78bfa', '#22b8cf'];
+      const activeSel = selectionFor(activeSeries);
 
       series.forEach((line, li) => {
         const pts = line.points || [];
@@ -334,7 +362,7 @@
         for (let i = 0; i < pts.length; i++) {
           const p = pts[i];
           const s = imageToScreen(p.px !== undefined ? p.px : p.x, p.py !== undefined ? p.py : p.y);
-          const isSel = isActive && selected.has(i);
+          const isSel = isActive && activeSel.has(i);
           ctx.beginPath();
           ctx.arc(s.x, s.y, isSel ? radius + 1.6 : radius, 0, Math.PI * 2);
           ctx.fillStyle = isSel ? t.warn : color;
@@ -359,6 +387,15 @@
     }
 
     // ------------------------------------------------------------ pointers
+
+    /*
+     * A click is a gesture in screen space, so the press and the release are
+     * compared in screen pixels. Measuring the distance in image pixels made
+     * the classification depend on the zoom level: a 40 screen pixel drag
+     * looked like a click when zoomed in and a 1 screen pixel jitter looked
+     * like a drag when zoomed out.
+     */
+    const CLICK_SLOP = 3;
 
     let dragging = false;
     let dragStart = null;
@@ -417,10 +454,13 @@
       if (dragging) {
         dragging = false;
         const origin = dragStart ? dragStart.img : { x: img.x, y: img.y };
-        const moved = dragStart ? G.dist({ x: img.x, y: img.y }, origin) : 0;
+        const startScreen = dragStart ? dragStart.screen : p;
+        // Screen space distance: the same pointer movement classifies the
+        // same way at every zoom level.
+        const moved = G.dist(p, startScreen);
         dragStart = null;
         try { canvas.releasePointerCapture(evt.pointerId); } catch (e) { void e; }
-        if (moved < 2) {
+        if (moved <= CLICK_SLOP) {
           emit('click', { image: img, screen: p, event: evt });
         } else {
           emit('dragend', { image: img, screen: p, origin: origin, event: evt });
@@ -429,7 +469,23 @@
     }
 
     canvas.addEventListener('pointerup', endPointer);
-    canvas.addEventListener('pointercancel', endPointer);
+
+    /*
+     * A cancelled pointer is an aborted gesture: it must not be reported as a
+     * finished click, otherwise a cancelled calibration or data point would
+     * be created.
+     */
+    canvas.addEventListener('pointercancel', (evt) => {
+      if (panning) {
+        panning = false;
+        dragStart = null;
+        canvas.parentElement.classList.remove('panning');
+      } else {
+        dragging = false;
+        dragStart = null;
+      }
+      try { canvas.releasePointerCapture(evt.pointerId); } catch (e) { void e; }
+    });
 
     canvas.addEventListener('wheel', (evt) => {
       evt.preventDefault();
@@ -510,12 +566,44 @@
         render();
       },
       setSeries(list, active) {
-        series = list || [];
-        activeSeries = active || 0;
+        const next = list || [];
+        const nextActive = active || 0;
+        // The point list of a series changed: its indices no longer address
+        // the same points, so the selection of that series is dropped.
+        next.forEach((line, i) => {
+          const prev = series[i];
+          const prevPoints = prev ? prev.points : null;
+          const nextPoints = line.points || null;
+          if (!prev || prevPoints !== nextPoints) {
+            selectionBySeries.delete(i);
+          }
+        });
+        // Switching series starts a new selection.
+        if (nextActive !== activeSeries) {
+          selectionBySeries.delete(nextActive);
+        }
+        series = next;
+        activeSeries = nextActive;
+        // Forget the series that no longer exist.
+        Array.from(selectionBySeries.keys()).forEach((key) => {
+          if (key >= series.length) selectionBySeries.delete(key);
+        });
         render();
       },
       setSelected(sel) {
-        selected = sel || new Set();
+        const line = series[activeSeries];
+        const count = line ? (line.points || []).length : 0;
+        const next = new Set();
+        (sel || []).forEach((i) => {
+          const n = Number(i);
+          if (isFinite(n) && n >= 0 && n < count) next.add(n);
+        });
+        // Only one series carries a selection: the table owns it, so the
+        // other series lose theirs.
+        Array.from(selectionBySeries.keys()).forEach((key) => {
+          if (key !== activeSeries) selectionBySeries.delete(key);
+        });
+        selectionBySeries.set(activeSeries, next);
         render();
       },
       setHoverPoint(index) {

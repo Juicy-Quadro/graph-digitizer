@@ -1,7 +1,7 @@
 {
   "name": "graph-digitizer",
   "productName": "Graph Digitizer",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Graph Digitizer - digitize data points from graphs and plots in images.",
   "main": "electron/main.js",
   "author": {
@@ -12,6 +12,7 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron . --remote-debugging-port=9333",
+    "test": "node tools/run-tests.js",
     "pack": "electron-builder --win --x64 --dir",
     "dist": "electron-builder --win --x64"
   },
@@ -22,7 +23,7 @@
   "build": {
     "appId": "com.graphdigitizer.app",
     "productName": "Graph Digitizer",
-    "copyright": "Copyright 漏 2026",
+    "copyright": "Copyright © 2026",
     "asar": true,
     "directories": {
       "output": "release",

@@ -314,6 +314,85 @@ section('5. Exporters');
   check('EPS defines lineto', eps.indexOf('/l {lineto} bind def') > 0);
 }
 
+// ------------------------------------------------- 5b. broken measurements
+
+section('5b. Exporters with broken measurements');
+{
+  /** The number of vertices in the first path of an SVG document. */
+  const svgPathVertices = (svg) => {
+    const m = svg.match(/\sd="([^"]*)"/);
+    if (!m) return 0;
+    return (m[1].match(/[ML]/g) || []).length;
+  };
+
+  const broken = {
+    lines: [{
+      name: 'Damaged',
+      color: '#ff0000',
+      points: [
+        { x: 1, y: 2, px: 10, py: 20 },
+        { x: NaN, y: 3, px: 20, py: 30 },
+        { x: 3, y: Infinity, px: 30, py: 40 },
+        { x: undefined, y: undefined, px: 40, py: 50 },
+        { x: 5, y: 6, px: 50, py: 60 }
+      ]
+    }],
+    calibration: { xScale: 'linear', yScale: 'linear', points: {} }
+  };
+
+  const svg = Exporters.exportData('svg', broken, {});
+  check('SVG has no NaN coordinate', svg.indexOf('NaN') < 0, svg.slice(0, 200));
+  check('SVG still draws the usable points', svg.indexOf('<path') > 0);
+  check('SVG path holds exactly two usable vertices',
+    svgPathVertices(svg) === 2, String(svgPathVertices(svg)));
+
+  const dxf = Exporters.exportData('dxf', broken, {});
+  check('DXF has no NaN coordinate', dxf.indexOf('NaN') < 0);
+  check('DXF keeps only the usable vertices',
+    (dxf.match(/VERTEX/g) || []).length === 2, String((dxf.match(/VERTEX/g) || []).length));
+
+  const eps = Exporters.exportData('eps', broken, {});
+  check('EPS has no NaN coordinate', eps.indexOf('NaN') < 0);
+  check('EPS draws two points', (eps.match(/ [ml]\r\n/g) || []).length === 2);
+
+  const xml = Exporters.exportData('xml', broken, {});
+  check('XML has no empty coordinate attribute', xml.indexOf('x=""') < 0 && xml.indexOf('y=""') < 0);
+  check('XML keeps only the usable points',
+    (xml.match(/<Point /g) || []).length === 2, String((xml.match(/<Point /g) || []).length));
+
+  const json = Exporters.exportData('json', broken, {});
+  const parsed = JSON.parse(json);
+  check('JSON marks a broken measurement as null',
+    parsed.series[0].points[1].x === null && parsed.series[0].points[1].y === 3,
+    JSON.stringify(parsed.series[0].points[1]));
+
+  const csv = Exporters.exportData('csv', broken, {});
+  check('CSV keeps the row alignment for a broken measurement',
+    csv.split('\r\n').length === 6, String(csv.split('\r\n').length));
+  check('CSV writes an empty cell instead of NaN', csv.indexOf('NaN') < 0);
+
+  // A logarithmic axis turns a non-positive value into a non-finite number,
+  // so such a point must not reach the drawing either.
+  const logData = {
+    lines: [{
+      name: 'Log',
+      points: [{ x: 0, y: 1 }, { x: 10, y: 100 }]
+    }],
+    calibration: { xScale: 'log', yScale: 'log', points: {} }
+  };
+  const logSvg = Exporters.exportData('svg', logData, {});
+  check('SVG drops a point that the log axis cannot represent',
+    logSvg.indexOf('NaN') < 0 && svgPathVertices(logSvg) === 1, String(svgPathVertices(logSvg)));
+  const logEps = Exporters.exportData('eps', logData, {});
+  check('EPS drops a point that the log axis cannot represent',
+    logEps.indexOf('NaN') < 0 && (logEps.match(/ [ml]\r\n/g) || []).length === 1);
+
+  const bounds = Exporters.logicalBounds(broken);
+  check('logical bounds ignore the broken points',
+    bounds && bounds.minX === 1 && bounds.maxX === 5 && bounds.minY === 2 && bounds.maxY === 6,
+    JSON.stringify(bounds));
+}
+
 // ---------------------------------------------------------------- 6. real sample
 
 section('6. Real figures vs GetData ground truth');

@@ -8,7 +8,8 @@
  * without a human in front of the screen.
  */
 
-const { app, BrowserWindow } = require('electron');
+const { app } = require('electron');
+const { createTestWindow } = require('./lib/test-window');
 const fs = require('fs');
 const path = require('path');
 
@@ -31,24 +32,17 @@ app.disableHardwareAcceleration();
 app.whenReady().then(async () => {
   fs.mkdirSync(outDir, { recursive: true });
 
-  const win = new BrowserWindow({
+  const win = createTestWindow({
+    root,
     width,
     height,
-    show: false,
-    backgroundColor: theme === 'light' ? '#f4f6fa' : '#11151c',
-    webPreferences: {
-      preload: path.join(root, 'electron', 'preload.js'),
-      contextIsolation: true,
-      nodeIntegration: false,
-      backgroundThrottling: false
-    }
+    backgroundColor: theme === 'light' ? '#f4f6fa' : '#11151c'
   });
   win.webContents.on('console-message', (_e, level, message) => {
     if (level >= 2) console.log('[renderer]', message);
   });
 
-  await win.loadFile(path.join(root, 'src', 'index.html'));
-  await new Promise((r) => setTimeout(r, 700));
+  await new Promise((r) => setTimeout(r, 900));
 
   const truth = JSON.parse(fs.readFileSync(path.join(root, 'testdata', 'sample3-truth.json'), 'utf8'));
   const png = fs.readFileSync(path.join(root, 'testdata', 'sample3.png'));
