@@ -28,6 +28,10 @@ function arg(name, fallback) {
   return i >= 0 && process.argv[i + 1] ? process.argv[i + 1] : fallback;
 }
 
+// A closed pipe must not take the whole run down.
+process.stdout.on('error', (err) => { void err; });
+process.stderr.on('error', (err) => { void err; });
+
 app.disableHardwareAcceleration();
 
 app.whenReady().then(async () => {
@@ -47,7 +51,7 @@ app.whenReady().then(async () => {
     if (!name.endsWith('.jpg') || known.has(name)) continue;
     papers.push({ file: name, paper: name.split('__')[0], title: '', category: '' });
   }
-  console.log('%d figures' % papers.length);
+  console.log('%d figures', papers.length);
   const win = createTestWindow({ root });
   await new Promise((r) => setTimeout(r, 1200));
   // The helpers of the benchmark live in the renderer, where the modules of
@@ -135,7 +139,7 @@ app.whenReady().then(async () => {
     }
   }
   fs.writeFileSync(manifestFile, JSON.stringify({ figures: manifest }, null, 1));
-  console.log('%d figures, %d with a curve, %d with a colour bar' % (manifest.length, withCurve, withBar));
+  console.log('%d figures, %d with a curve, %d with a colour bar', manifest.length, withCurve, withBar);
   console.log('wrote ' + manifestFile);
   app.exit(0);
 });

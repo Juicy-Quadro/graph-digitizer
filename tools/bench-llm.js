@@ -35,6 +35,15 @@ const manifestFile = path.join(benchDir, 'manifest.json');
 const resultsFile = path.join(benchDir, 'results.jsonl');
 const visionFile = path.join(__dirname, 'bench-vision.js');
 
+/*
+ * A run that is started in the background writes into a pipe that is closed
+ * again when the shell that started it goes away. The write then fails, and
+ * an unhandled failure of that kind takes the whole process down and puts an
+ * error window on the screen.
+ */
+process.stdout.on('error', (err) => { void err; });
+process.stderr.on('error', (err) => { void err; });
+
 // The benchmark keeps its own key, in its own folder, so that it never
 // touches the key of the application and two runs cannot delete each
 // other's key.
@@ -431,13 +440,13 @@ app.whenReady().then(async () => {
     out.write(JSON.stringify(record) + '\n');
     count++;
     if (count % 5 === 0) {
-      console.log('  %d figures measured' % count);
+      console.log('  %d figures measured', count);
     }
   }
   out.end();
   // The key of the benchmark is left in its own folder, so a second run can
   // go on without setting it again.
-  console.log('%d figures measured' % count);
+  console.log('%d figures measured', count);
   app.exit(0);
 });
 

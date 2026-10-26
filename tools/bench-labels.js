@@ -24,6 +24,10 @@ const figuresDir = path.join(benchDir, 'figures');
 const manifestFile = path.join(benchDir, 'manifest.json');
 const outFile = path.join(benchDir, 'labels.json');
 
+// A closed pipe must not take the whole run down.
+process.stdout.on('error', (err) => { void err; });
+process.stderr.on('error', (err) => { void err; });
+
 app.disableHardwareAcceleration();
 
 app.whenReady().then(async () => {
