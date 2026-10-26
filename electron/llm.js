@@ -26,6 +26,13 @@ const API_BASE = 'https://api.minimax.chat/v1/chat/completions';
  */
 const MIN_MAX_TOKENS = 16000;
 
+/**
+ * The budget of the curve request. The model thinks before it answers, and
+ * a figure with several curves needs a lot of tokens for the answer itself,
+ * so the budget is twice the lower bound.
+ */
+const CURVE_MAX_TOKENS = 32000;
+
 const KEY_FILE = 'llm-key.bin';
 const KEY_MAGIC = 'GD-LLM-KEY-1';
 
@@ -266,7 +273,7 @@ function buildCurvePrompt(options) {
     'colour cannot be determined.\n' +
     '- "points" holds the points of one curve in the order in which they ' +
     'appear along the curve, covering the whole visible curve from one end ' +
-    'to the other.\n' +
+    'to the other. Use at most sixty points per curve.\n' +
     '- When the figure contains no curve at all, answer exactly {"series":[]}.';
 }
 
@@ -564,7 +571,10 @@ async function extractCurves(payload) {
     system: SYSTEM_PROMPT,
     prompt: buildCurvePrompt({ width: width, height: height }),
     imageDataURL: data.image,
-    maxTokens: MIN_MAX_TOKENS
+    // The model thinks before it answers, and a figure with several curves
+    // needs a lot of tokens for the answer. With too small a budget the
+    // reply is cut off before the JSON starts.
+    maxTokens: CURVE_MAX_TOKENS
   });
   if (!reply.ok) {
     return { ok: false, error: reply.error, series: [] };
