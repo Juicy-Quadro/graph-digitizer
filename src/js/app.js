@@ -976,7 +976,16 @@
     canvasView.setBar(null, [], store.state.grid.orientation);
   }
 
-  function loadImageFromDataURL(dataURL, name, path) {
+  /**
+   * Put a figure on the canvas.
+   *
+   * @param {string} dataURL
+   * @param {string} name
+   * @param {string} path
+   * @param {boolean} keepColours  keep the colours that are already set,
+   *   which is what a workspace does: it brings its own colours
+   */
+  function loadImageFromDataURL(dataURL, name, path, keepColours) {
     return new Promise((resolve, reject) => {
       const img = new Image();
       img.onload = () => {
@@ -1005,13 +1014,20 @@
          * The colours of the figure are guessed right away, so that the
          * figure can be traced without picking them by hand first. The mask
          * is drawn over the figure, so the guess is visible right away, and
-         * the two colour tools pick them again if it is wrong.
+         * the two colour tools pick them again if it is wrong. A workspace
+         * brings its own colours and keeps them.
          */
-        applyAutoColours(false, false);
+        if (!keepColours) applyAutoColours(false, false);
         recomputeMask();
-        toast(t('msg.imageLoaded', {
-          name: image.name, w: image.width, h: image.height
-        }) + ' · ' + t('msg.autoColours'), 'ok');
+        if (keepColours) {
+          toast(t('msg.imageLoaded', {
+            name: image.name, w: image.width, h: image.height
+          }), 'ok');
+        } else {
+          toast(t('msg.imageLoaded', {
+            name: image.name, w: image.width, h: image.height
+          }) + ' · ' + t('msg.autoColours'), 'ok');
+        }
         resolve();
       };
       img.onerror = () => reject(new Error('decode failed'));
@@ -1715,7 +1731,8 @@
           await loadImageFromDataURL(
             'data:image/' + (data.image.name.split('.').pop() || 'png').toLowerCase() + ';base64,' + bytes,
             data.image.name,
-            data.image.path
+            data.image.path,
+            true
           );
         }
       } catch (err) {

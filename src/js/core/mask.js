@@ -212,7 +212,15 @@
       const cand = list[i];
       const d = G.colorDistance(cand.color[0], cand.color[1], cand.color[2], bg[0], bg[1], bg[2]);
       if (d < 30) continue;
-      const score = d * Math.log(1 + cand.n);
+      /*
+       * A curve is usually drawn in a colour, while the axes and the text
+       * of the figure are black or grey. A colour that stands out from the
+       * grey ones is the better guess, even when there are fewer pixels of
+       * it - a thin blue curve has fewer pixels than the black axes.
+       */
+      const sat = Math.max(cand.color[0], cand.color[1], cand.color[2]) -
+        Math.min(cand.color[0], cand.color[1], cand.color[2]);
+      const score = d * Math.log(1 + cand.n) * (1 + sat / 160);
       if (score > bestScore) {
         bestScore = score;
         best = cand.color.slice();

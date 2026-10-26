@@ -193,6 +193,27 @@ section('2. Line / background identification');
   check('auto detect returns a background close to white',
     Math.abs(guess.bgColor[0] - 255) < 12 && Math.abs(guess.bgColor[1] - 255) < 12,
     JSON.stringify(guess.bgColor));
+
+  /*
+   * The axes and the text of a figure are black or grey, and a curve is
+   * usually drawn in a colour. The curve has fewer pixels, so the colour
+   * has to count for more than the number of pixels.
+   */
+  const axesAndCurve = makeImage(200, 120, (data, w, h) => {
+    // Two black axes and a black frame of text.
+    for (let x = 10; x < 190; x++) px(data, w, x, 100, 0, 0, 0);
+    for (let y = 10; y < 100; y++) px(data, w, 10, y, 0, 0, 0);
+    for (let i = 0; i < 60; i++) px(data, w, 30 + i, 20, 0, 0, 0);
+    // A thin blue curve.
+    for (let x = 20; x < 180; x++) {
+      const y = 60 + Math.round(Math.sin(x / 12) * 20);
+      px(data, w, x, y, 0, 90, 220);
+    }
+  });
+  const coloured = Mask.autoDetectColors(axesAndCurve);
+  check('auto detect prefers the colour of the curve over the black axes',
+    coloured.lineColor[2] > 150 && coloured.lineColor[0] < 120,
+    JSON.stringify(coloured.lineColor));
 }
 
 // ---------------------------------------------------------------- 3. trace

@@ -111,6 +111,27 @@ app.whenReady().then(async () => {
   })()`);
   check('the empty state carries the quick start guide', empty.count === 3, empty.count + ' cards');
 
+  // --- 6. the colours of the figure are found when it is opened ---------
+  const colours = await run(`(async () => {
+    const g = window.__gd;
+    const url = ${JSON.stringify(dataURL)};
+    // A figure that is opened gets its colours from the program, so the
+    // colours that were set before are replaced.
+    g.setSampling({ lineColor: [12, 34, 56] });
+    await g.loadImage(url, 'a.png', 'C:/tmp/a.png');
+    const found = g.store.state.sampling.lineColor;
+    // A workspace brings its own colours and keeps them.
+    g.setSampling({ lineColor: [12, 34, 56] });
+    await g.loadImage(url, 'b.png', 'C:/tmp/b.png', true);
+    return { found, kept: g.store.state.sampling.lineColor };
+  })()`);
+  check('the colours of a figure are found when it is opened',
+    !!colours.found && (colours.found[0] !== 12 || colours.found[1] !== 34 || colours.found[2] !== 56),
+    JSON.stringify(colours.found));
+  check('a workspace keeps the colours it brings',
+    colours.kept && colours.kept[0] === 12 && colours.kept[1] === 34 && colours.kept[2] === 56,
+    JSON.stringify(colours.kept));
+
   console.log('\n' + (failures ? failures + ' check(s) FAILED' : 'all experience checks passed'));
   app.exit(failures ? 1 : 0);
 });
