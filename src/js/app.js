@@ -1404,7 +1404,10 @@
    * tall.
    */
   function cropColorBar(rect, orientation) {
-    const crop = GD.ColorBar.labelWindow(image.imageData, rect, { margin: 10 });
+    const crop = GD.ColorBar.labelWindow(image.imageData, rect, {
+      margin: 10,
+      orientation: orientation
+    });
     const source = image.canvas;
     const turned = document.createElement('canvas');
     turned.width = Math.max(1, Math.round(crop.w));
@@ -1425,6 +1428,7 @@
       dataURL: final.toDataURL('image/png'),
       width: final.width,
       height: final.height,
+      scale: size.scale,
       offsetX: crop.x,
       offsetY: crop.y,
       orientation: orientation
@@ -1466,6 +1470,9 @@
         image: crop.dataURL,
         width: crop.width,
         height: crop.height,
+        // The picture was scaled up before it was sent, so the places the
+        // model reports have to be divided by this again.
+        scale: crop.scale,
         offsetX: crop.offsetX,
         offsetY: crop.offsetY,
         orientation: g.orientation
@@ -1490,15 +1497,20 @@
      * the answer. When the two do not line up, the answer keeps its own
      * positions.
      */
-    const printed = GD.ColorBar.findTickLabels(image.imageData, g.bar)
+    const printed = GD.ColorBar.findTickLabels(image.imageData, g.bar, {
+      orientation: g.orientation
+    })
       .filter((l) => l.t >= -0.05 && l.t <= 1.05)
-      .sort((a, b) => a.y - b.y);
+      .sort((a, b) => (g.orientation === 'horizontal' ? a.x - b.x : a.y - b.y));
     const read = [];
     for (const tick of ticks) {
       if (!isFinite(tick.position)) continue;
+      // The model measured the tick in the picture it saw, and that picture
+      // is the crop scaled up. The scale has to come off again.
+      const along = tick.position / (crop.scale || 1);
       const original = g.orientation === 'horizontal'
-        ? crop.offsetX + tick.position
-        : crop.offsetY + tick.position;
+        ? crop.offsetX + along
+        : crop.offsetY + along;
       const t = g.orientation === 'horizontal'
         ? (original - g.bar.x) / g.bar.w
         : 1 - (original - g.bar.y) / g.bar.h;

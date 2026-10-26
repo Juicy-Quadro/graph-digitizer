@@ -353,9 +353,10 @@ app.whenReady().then(async () => {
     g.setLlmReadBar((payload) => {
       window.__aiPayload = payload;
       const bar = g.store.state.grid.bar;
-      // The places are measured from the top of the crop, and they are ten
-      // pixels off, the way the model places them on real figures.
-      const at = (originalY) => originalY - payload.offsetY + 10;
+      // The places are measured in the picture the model saw, which is the
+      // crop scaled up, and they are ten pixels off, the way the model
+      // places them on real figures.
+      const at = (originalY) => (originalY - payload.offsetY) * (payload.scale || 1) + 10;
       return {
         ok: true,
         ticks: [

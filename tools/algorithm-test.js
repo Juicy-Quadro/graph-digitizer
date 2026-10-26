@@ -776,6 +776,85 @@ section('8. Colour bar calibration and field extraction');
     labels.length === 2 && Math.abs(labels[1].t - (1 - (238 - 20) / 260)) < 0.02,
     labels.length ? String(labels[1].t) : '');
 
+  // A speck of dust next to the bar must not throw the labels away.
+  const speckImage = makeImage(240, 300, (data) => {
+    for (let y = 20; y < 280; y++) {
+      for (let x = 160; x < 170; x++) px(data, 240, x, y, 20, 20, 220);
+    }
+    for (const y0 of [44, 134, 234]) {
+      for (let y = y0; y < y0 + 10; y++) {
+        for (let x = 195; x < 209; x++) px(data, 240, x, y, 0, 0, 0);
+      }
+    }
+    // One dark pixel much nearer to the bar than the labels.
+    px(data, 240, 174, 100, 0, 0, 0);
+  });
+  const speckLabels = ColorBar.findTickLabels(speckImage, { x: 160, y: 20, w: 10, h: 260 });
+  check('a speck next to the bar does not throw the labels away',
+    speckLabels.length === 3, speckLabels.length + ' labels');
+
+  // A legend under the bar must not push the labels of the bar away.
+  const legendImage = makeImage(240, 300, (data) => {
+    for (let y = 20; y < 280; y++) {
+      for (let x = 160; x < 170; x++) px(data, 240, x, y, 20, 20, 220);
+    }
+    // The labels of the bar, close to it.
+    for (const y0 of [44, 134]) {
+      for (let y = y0; y < y0 + 10; y++) {
+        for (let x = 178; x < 192; x++) px(data, 240, x, y, 0, 0, 0);
+      }
+    }
+    // A legend further to the right, with a line of its own.
+    for (const y0 of [200, 220, 240]) {
+      for (let y = y0; y < y0 + 10; y++) {
+        for (let x = 200; x < 220; x++) px(data, 240, x, y, 0, 0, 0);
+      }
+    }
+  });
+  const legendLabels = ColorBar.findTickLabels(legendImage, { x: 160, y: 20, w: 10, h: 260 });
+  const legendHasBar = legendLabels.filter((l) => Math.abs(l.y - 48) < 4).length === 1 &&
+    legendLabels.filter((l) => Math.abs(l.y - 138) < 4).length === 1;
+  check('the labels of the bar are found next to other text',
+    legendHasBar, JSON.stringify(legendLabels.map((l) => l.y)));
+
+  // A horizontal colour bar is numbered along its whole length, and its
+  // labels are printed under it.
+  const wideImage = makeImage(320, 200, (data) => {
+    for (let y = 60; y < 76; y++) {
+      for (let x = 40; x < 240; x++) {
+        px(data, 320, x, y, x < 140 ? 20 : 220, 20, x < 140 ? 220 : 20);
+      }
+    }
+    for (const x0 of [40, 100, 160, 220]) {
+      for (let y = 84; y < 94; y++) {
+        for (let x = x0; x < x0 + 14; x++) px(data, 320, x, y, 0, 0, 0);
+      }
+    }
+  });
+  const wideBar = { x: 40, y: 60, w: 200, h: 16 };
+  const wideScan = ColorBar.scanBar(wideImage, wideBar, { orientation: 'horizontal' });
+  check('a horizontal bar is read from its left end',
+    wideScan.ok && Math.abs(wideScan.samples[0].t) < 0.02,
+    wideScan.ok ? String(wideScan.samples[0].t) : 'no samples');
+  const blueSample = wideScan.ok
+    ? wideScan.samples.find((s) => s.color[2] > 200)
+    : null;
+  check('the left half of a horizontal bar is the first half',
+    !!blueSample && blueSample.t < 0.55,
+    blueSample ? String(blueSample.t) : 'no blue');
+  const wideLabels = ColorBar.findTickLabels(wideImage, wideBar, { orientation: 'horizontal' });
+  check('the labels of a horizontal bar are found',
+    wideLabels.length === 4, wideLabels.length + ' labels');
+  check('the labels of a horizontal bar sit along the bar',
+    wideLabels.length === 4 &&
+      Math.abs(wideLabels[0].t - 0.035) < 0.03 &&
+      Math.abs(wideLabels[3].t - 0.935) < 0.03,
+    wideLabels.length ? JSON.stringify(wideLabels.map((l) => l.t)) : '');
+  const wideWindow = ColorBar.labelWindow(wideImage, wideBar, { margin: 10 });
+  check('the window of a horizontal bar holds its labels',
+    wideWindow.y <= 84 && wideWindow.y + wideWindow.h >= 94,
+    JSON.stringify(wideWindow));
+
   // The numbers of the model are paired with the places of the labels.
   const aligned = ColorBar.alignTicks(
     [

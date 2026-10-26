@@ -88,10 +88,27 @@
     const W = imageData.width;
     const H = imageData.height;
 
-    const x0 = Math.max(0, Math.round(rect.x + rect.w * inset));
-    const x1 = Math.min(W, Math.round(rect.x + rect.w * (1 - inset)));
-    const y0 = Math.max(0, Math.round(rect.y));
-    const y1 = Math.min(H, Math.round(rect.y + rect.h));
+    /*
+     * The inset keeps the frame and the tick labels out of the samples. It
+     * has to cut across the bar and never along it: a bar that is trimmed at
+     * its ends would be numbered from the wrong place, and the values would
+     * not match the anchors that were typed in.
+     */
+    let x0;
+    let x1;
+    let y0;
+    let y1;
+    if (vertical) {
+      x0 = Math.max(0, Math.round(rect.x + rect.w * inset));
+      x1 = Math.min(W, Math.round(rect.x + rect.w * (1 - inset)));
+      y0 = Math.max(0, Math.round(rect.y));
+      y1 = Math.min(H, Math.round(rect.y + rect.h));
+    } else {
+      x0 = Math.max(0, Math.round(rect.x));
+      x1 = Math.min(W, Math.round(rect.x + rect.w));
+      y0 = Math.max(0, Math.round(rect.y + rect.h * inset));
+      y1 = Math.min(H, Math.round(rect.y + rect.h * (1 - inset)));
+    }
     if (x1 - x0 < 1 || y1 - y0 < 1) {
       return { ok: false, reason: 'the frame is empty', samples: [], rect: rect };
     }
@@ -102,7 +119,7 @@
         const c = rowColor(data, W, H, x0, x1, y);
         if (!c) continue;
         samples.push({
-          t: 1 - (y - y0 + 0.5) / (y1 - y0),
+          t: 1 - (y - rect.y + 0.5) / rect.h,
           color: c,
           position: y
         });
@@ -113,6 +130,7 @@
         const buckets = new Map();
         for (let y = y0; y < y1; y++) {
           const p = (y * W + x) * 4;
+          if (data[p + 3] === 0) continue;
           const r = data[p];
           const g = data[p + 1];
           const b = data[p + 2];
@@ -134,7 +152,7 @@
         });
         if (best.n < (y1 - y0) * 0.2) continue;
         samples.push({
-          t: (x - x0 + 0.5) / (x1 - x0),
+          t: (x - rect.x + 0.5) / rect.w,
           color: [
             Math.round(best.r / best.n),
             Math.round(best.g / best.n),
@@ -450,22 +468,67 @@
    *
    * @param {ImageData} imageData
    * @param {object} bar  the rectangle of the bar
+   * @param {object} [options]
+   *   orientation : 'vertical' (default) or 'horizontal'
    * @returns {object} { left, right, top, bottom } in image pixels
    */
-  function labelExtent(imageData, bar) {
+  function labelExtent(imageData, bar, options) {
+    const opt = options || {};
+    const horizontal = opt.orientation === 'horizontal';
     const w = imageData.width;
     const h = imageData.height;
     const data = imageData.data;
     const limit = 300;
     let left = bar.x;
     let right = bar.x + bar.w;
-    const top = Math.max(0, bar.y - 24);
-    const bottom = Math.min(h, bar.y + bar.h + 24);
+    let top = bar.y;
+    let bottom = bar.y + bar.h;
 
     const dark = (x, y) => {
       const p = (y * w + x) * 4;
       return 0.299 * data[p] + 0.587 * data[p + 1] + 0.114 * data[p + 2] < 125;
     };
+
+    if (horizontal) {
+      /*
+       * The labels of a horizontal bar are printed under it or over it, so
+       * the window has to grow upwards and downwards. The text is looked for
+       * over the whole length of the bar.
+       */
+      const fx0 = Math.max(0, Math.floor(bar.x));
+      const fx1 = Math.min(w, Math.ceil(bar.x + bar.w));
+      const fy0 = Math.max(0, Math.floor(bar.y));
+      const fy1 = Math.min(h, Math.ceil(bar.y + bar.h));
+      for (let x = fx0; x < fx1; x++) {
+        for (let y = fy0 - 1; y >= 0 && y >= fy0 - limit; y--) {
+          if (!dark(x, y)) continue;
+          if (y < top) top = y;
+          break;
+        }
+        for (let y = fy1; y < h && y < fy1 + limit; y++) {
+          if (!dark(x, y)) continue;
+          if (y + 1 > bottom) bottom = y + 1;
+          break;
+        }
+      }
+      // Text beside the ends of the bar belongs to it as well.
+      for (let y = fy0; y < fy1; y++) {
+        for (let x = fx0 - 1; x >= 0 && x >= fx0 - limit; x--) {
+          if (!dark(x, y)) continue;
+          if (x < left) left = x;
+          break;
+        }
+        for (let x = fx1; x < w && x < fx1 + limit; x++) {
+          if (!dark(x, y)) continue;
+          if (x + 1 > right) right = x + 1;
+          break;
+        }
+      }
+      return { left: left, right: right, top: top, bottom: bottom };
+    }
+
+    top = Math.max(0, bar.y - 24);
+    bottom = Math.min(h, bar.y + bar.h + 24);
 
     // To the right of the bar. The whole span is looked at, because the
     // end of the text is what matters, not where it begins.
@@ -490,14 +553,15 @@
    *
    * @param {ImageData} imageData
    * @param {object} bar
-   * @param {object} options
+   * @param {object} [options]
    *   margin : free space around the text (default 10)
+   *   orientation : 'vertical' (default) or 'horizontal'
    * @returns {object} { x, y, w, h }
    */
   function labelWindow(imageData, bar, options) {
     const opt = options || {};
     const margin = opt.margin === undefined ? 10 : opt.margin;
-    const extent = labelExtent(imageData, bar);
+    const extent = labelExtent(imageData, bar, opt);
     const w = imageData.width;
     const h = imageData.height;
     const x = Math.max(0, Math.min(bar.x - 6, extent.left - margin));
@@ -533,10 +597,20 @@
    *
    * @param {ImageData} imageData
    * @param {object} bar
-   * @returns {Array} [{ y, height, t }] with t from 0 at the low end of the bar
+   * @param {object} [options]
+   *   orientation : 'vertical' (default) or 'horizontal'
+   * @returns {Array} [{ y, x, height, t }] with t from 0 at the low end of the bar
    */
-  function findTickLabels(imageData, bar) {
+  function findTickLabels(imageData, bar, options) {
     if (!bar) return [];
+    const opt = options || {};
+    const horizontal = opt.orientation === 'horizontal';
+    if (horizontal) {
+      // The labels of a horizontal bar are printed under it or over it.
+      const below = labelBlocksHorizontal(imageData, bar, 1);
+      if (below.length) return below;
+      return labelBlocksHorizontal(imageData, bar, -1);
+    }
     // The labels are printed next to the bar. They are usually on its right
     // hand side; when there is nothing there, the left hand side is tried,
     // because a figure may put the bar on the left of the plot.
@@ -545,7 +619,16 @@
     return labelBlocksOnSide(imageData, bar, -1);
   }
 
-  /** The blocks of text on one side of a colour bar. */
+  /**
+   * The blocks of text on one side of a colour bar.
+   *
+   * Every row that carries text in the window is a candidate. Nothing is
+   * thrown away here: the text of the plot and the labels of a legend may sit
+   * next to the bar as well, and the place of a tick is decided later, by
+   * the number that belongs to it. A label that is left out would move the
+   * number that belongs to it, and that is much worse than a row of text
+   * that turns out to be something else.
+   */
   function labelBlocksOnSide(imageData, bar, side) {
     const w = imageData.width;
     const h = imageData.height;
@@ -567,6 +650,7 @@
     const y1 = Math.min(h, bar.y + bar.h + 40);
     if (y1 <= y0) return [];
 
+    // How much text is on every row.
     const dark = [];
     for (let y = y0; y < y1; y++) {
       let n = 0;
@@ -576,7 +660,7 @@
       }
       dark.push(n);
     }
-    // The blocks of rows that carry text.
+    // The rows that carry text.
     const blocks = [];
     let start = -1;
     for (let i = 0; i <= dark.length; i++) {
@@ -597,15 +681,156 @@
       }
     }
     return merged
-      .filter((b) => b[1] - b[0] >= 8)
+      .filter((b) => b[1] - b[0] >= 5)
       .map((b) => {
         const y = y0 + Math.round((b[0] + b[1]) / 2);
         return {
           y: y,
           height: b[1] - b[0],
+          distance: side > 0 ? x0 - bar.x - bar.w : bar.x - x1,
           t: 1 - (y - bar.y) / bar.h
         };
       });
+  }
+
+  /**
+   * The column that carries the most rows.
+   *
+   * @param {Array} nearest  the distance of the text on every row
+   * @param {number} side  1 when the text is on the right of the bar
+   * @returns {number} the column, or -1 when there is no text at all
+   */
+  function busiestColumn(nearest, side) {
+    const counts = new Map();
+    for (const n of nearest) {
+      if (n < 0) continue;
+      counts.set(n, (counts.get(n) || 0) + 1);
+    }
+    if (!counts.size) return -1;
+    let column = -1;
+    let best = 0;
+    counts.forEach((count, n) => {
+      // On a tie the column that is nearest to the bar wins.
+      const nearer = column < 0 || (side > 0 ? n < column : n > column);
+      if (count > best || (count === best && nearer)) {
+        column = n;
+        best = count;
+      }
+    });
+    return column;
+  }
+
+  /**
+   * The tick labels of a horizontal colour bar.
+   *
+   * They are printed under the bar or over it. Every column of the bar is
+   * looked at and the row of the text that is nearest to the bar is kept.
+   * The labels that share one text line are then told apart by the gaps
+   * between them, which are wider than the gaps inside a number.
+   *
+   * @param {ImageData} imageData
+   * @param {object} bar
+   * @param {number} side  1 for the text under the bar, -1 for the text over it
+   * @returns {Array} [{ x, y, height, t }]
+   */
+  function labelBlocksHorizontal(imageData, bar, side) {
+    const w = imageData.width;
+    const h = imageData.height;
+    const data = imageData.data;
+    const gap = 2;
+    const span = 90;
+    const x0 = Math.max(0, Math.floor(bar.x));
+    const x1 = Math.min(w, Math.ceil(bar.x + bar.w));
+    if (x1 <= x0) return [];
+    let y0;
+    let y1;
+    if (side > 0) {
+      y0 = bar.y + bar.h + gap;
+      y1 = Math.min(h, y0 + span);
+    } else {
+      y1 = bar.y - gap;
+      y0 = Math.max(0, y1 - span);
+    }
+    if (y1 <= y0) return [];
+
+    const isDark = (x, y) => {
+      const p = (y * w + x) * 4;
+      return 0.299 * data[p] + 0.587 * data[p + 1] + 0.114 * data[p + 2] < 120;
+    };
+
+    // The text that is nearest to the bar, for every column of the bar.
+    const tops = new Array(x1 - x0).fill(-1);
+    const bottoms = new Array(x1 - x0).fill(-1);
+    for (let x = x0; x < x1; x++) {
+      const i = x - x0;
+      if (side > 0) {
+        for (let y = y0; y < y1; y++) {
+          if (!isDark(x, y)) continue;
+          tops[i] = y;
+          let b = y;
+          while (b + 1 < y1 && isDark(x, b + 1)) b++;
+          bottoms[i] = b;
+          break;
+        }
+      } else {
+        for (let y = y1 - 1; y >= y0; y--) {
+          if (!isDark(x, y)) continue;
+          bottoms[i] = y;
+          let b = y;
+          while (b - 1 >= y0 && isDark(x, b - 1)) b--;
+          tops[i] = b;
+          break;
+        }
+      }
+    }
+
+    // The text line that carries the most columns is the line of the labels.
+    const line = busiestColumn(tops, side);
+    if (line < 0) return [];
+    let lineBottom = line;
+    for (let i = 0; i < tops.length; i++) {
+      if (tops[i] !== line) continue;
+      if (bottoms[i] > lineBottom) lineBottom = bottoms[i];
+    }
+    const textHeight = Math.max(1, lineBottom - line + 1);
+
+    // The columns of the text line.
+    const ink = [];
+    for (let i = 0; i < tops.length; i++) {
+      if (tops[i] >= 0 && Math.abs(tops[i] - line) <= 4) ink.push(i);
+    }
+    if (!ink.length) return [];
+
+    /*
+     * Two numbers are told apart by the gap between them. The gap inside a
+     * number is small, the gap between two numbers is about the height of
+     * the text, so the height of the text is the measure.
+     */
+    const separation = Math.max(4, textHeight * 0.5);
+    const groups = [];
+    let group = [ink[0]];
+    for (let i = 1; i < ink.length; i++) {
+      if (ink[i] - ink[i - 1] >= separation) {
+        groups.push(group);
+        group = [];
+      }
+      group.push(ink[i]);
+    }
+    groups.push(group);
+
+    const out = [];
+    for (const g of groups) {
+      const from = x0 + g[0];
+      const to = x0 + g[g.length - 1];
+      const centre = (from + to) / 2;
+      out.push({
+        x: centre,
+        y: (line + lineBottom) / 2,
+        height: textHeight,
+        t: (centre - bar.x) / bar.w
+      });
+    }
+    return out;
   }
 
   /**
