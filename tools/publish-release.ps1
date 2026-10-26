@@ -39,7 +39,46 @@ $notes = @'
 Digitise data points out of graphs and plots in images, and the colours of a
 contour map into numbers.
 
-### What is new in 1.4.0
+### What is new in 1.4.2
+
+The benchmark was run again on the real figures, and it found four more
+problems. All four are fixed.
+
+- **The place of a tick was read in the picture the model saw, not in the
+  figure.** The crop is scaled up before it goes to the model, so the model
+  reports the place of a tick in the scaled picture while the application
+  took it for a place in the original figure. With a crop that was scaled by
+  4.7 the error was 4.7 times too big. The scale is taken off again now, and
+  the distance between the place the model gave and the place of the printed
+  label fell from a median of 84.9 pixels to 1.5 pixels.
+- **The labels of the colour bar were looked for in the column of text that
+  stood nearest to the bar.** A legend or an axis title that stood nearer
+  took the labels with it, and one speck of dust was enough to lose all of
+  them. The rows that carry text are counted now, and nothing is left out:
+  which of them is a tick label is decided later, by the number that belongs
+  to it. The worst label moved from 129 pixels away to 35.
+- **A horizontal colour bar was numbered from the wrong end of itself.** The
+  part of the bar that is left out to keep the frame out of the way was cut
+  off the length of the bar instead of off its thickness, so the bands were
+  counted from a quarter of the way along the bar and the numbers did not
+  match the values that were typed in. The bar is now numbered along its
+  whole length, and the labels of a horizontal bar are found above and below
+  it.
+- **The benchmark measured the labels of its reference instead of the labels
+  of the application.** The window of the reference starts twenty pixels
+  behind the bar, so on most figures it never saw the labels of the bar at
+  all and measured the numbers of the plot instead. The number it produced -
+  28.98 percent - said more about the reference than about the model. The
+  benchmark now uses the labels of the application, the same code the answer
+  is used with.
+
+The place of a printed label is now only used when it stands very close to
+the place the model gave, because the model reads the place of a tick well
+and a block of text that is no number can stand next to the bar as well.
+On the real figures the numbers on the places of the program sit 0.05
+percent off the line, where they were 2.85 percent off it before.
+
+### What was new in 1.4.0
 
 A benchmark of the model on **hundreds of real figures from arXiv papers** went
 looking for weak spots, and it found three. All three are fixed.
@@ -204,7 +243,7 @@ below 1e-13 px.
 
 ### Regression suites
 
-Eight executable suites, 193 assertions in total:
+Eight executable suites, 201 assertions in total:
 
     node tools/run-tests.js
 

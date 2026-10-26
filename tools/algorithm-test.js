@@ -883,6 +883,16 @@ section('8. Colour bar calibration and field extraction');
   check('a label that is too far away is left alone',
     far.length === 1 && Math.abs(far[0].t - 0.52) < 1e-6 && far[0].fromLabel === false,
     JSON.stringify(far));
+
+  // The label of the last tick is often printed next to the bar and not on
+  // it, so its place is a little outside. It has to stay there.
+  const outside = ColorBar.alignTicks(
+    [{ t: -0.048, value: 20, label: '20' }],
+    [],
+    0.01);
+  check('a tick outside the bar keeps its own place',
+    outside.length === 1 && Math.abs(outside[0].t + 0.048) < 1e-6,
+    JSON.stringify(outside));
 }
 
 // ---------------------------------------------------------------- summary

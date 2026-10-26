@@ -890,8 +890,14 @@
           fromLabel: true
         });
       } else if (isFinite(tick.t)) {
+        /*
+         * The place the model gave is kept as it is. A tick may stand
+         * outside the bar, because the label of the last tick is printed
+         * next to it and not on it, and moving it onto the bar would put
+         * the number in the wrong place.
+         */
         out.push({
-          t: Math.max(0, Math.min(1, tick.t)),
+          t: Math.max(-0.25, Math.min(1.25, tick.t)),
           value: tick.value,
           label: tick.label || '',
           fromLabel: false

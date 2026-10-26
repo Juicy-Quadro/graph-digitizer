@@ -69,7 +69,7 @@ const wantBar = task === 'both' || task === 'bar';
  * the labels are found changes, so that the older measurements are made
  * again.
  */
-const BAR_SOURCE = 'app2';
+const BAR_SOURCE = 'app3';
 
 /**
  * Pairs the numbers the model read with the places where the labels are
@@ -100,7 +100,7 @@ function alignTicks(ticks, labels, limit) {
       used.add(best);
       out.push({ t: list[best].t, value: tick.value });
     } else if (isFinite(tick.t)) {
-      out.push({ t: Math.max(0, Math.min(1, tick.t)), value: tick.value });
+      out.push({ t: Math.max(-0.25, Math.min(1.25, tick.t)), value: tick.value });
     }
   }
   return out;
