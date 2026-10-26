@@ -65,9 +65,11 @@ const wantBar = task === 'both' || task === 'bar';
  * Where the places of the tick labels come from.
  *
  * The labels of the application are the ones the answer is used with, so the
- * measurement has to be made with them.
+ * measurement has to be made with them. The number is raised when the way
+ * the labels are found changes, so that the older measurements are made
+ * again.
  */
-const BAR_SOURCE = 'app';
+const BAR_SOURCE = 'app2';
 
 /**
  * Pairs the numbers the model read with the places where the labels are
@@ -430,7 +432,7 @@ app.whenReady().then(async () => {
           }));
           // The way the application uses the answer: the program supplies
           // the positions and the model only the numbers.
-          const matched = alignTicks(pairs, printed, 0.12);
+          const matched = alignTicks(pairs, printed, 0.01);
           record.bar.residualPrinted = affineResidual(matched);
           record.bar.printed = matched.map((m) => Math.round(m.t * 1000) / 1000);
         }

@@ -680,8 +680,21 @@
         merged.push([b[0], b[1]]);
       }
     }
-    return merged
-      .filter((b) => b[1] - b[0] >= 5)
+    const usable = merged.filter((b) => b[1] - b[0] >= 5);
+    if (!usable.length) return [];
+
+    /*
+     * A line of text is short. A block that is much taller is a title that
+     * is printed along the bar, and the number that was printed next to it
+     * was swallowed by it. The middle of such a block is not the place of
+     * any number, so it is left out.
+     */
+    const heights = usable.map((b) => b[1] - b[0]).sort((a, b) => a - b);
+    const typical = heights[Math.floor(heights.length / 2)];
+    const limit = Math.max(typical * 2, 30);
+
+    return usable
+      .filter((b) => b[1] - b[0] <= limit)
       .map((b) => {
         const y = y0 + Math.round((b[0] + b[1]) / 2);
         return {
@@ -837,9 +850,14 @@
    * Pairs the numbers the model read with the places where the labels are
    * printed.
    *
-   * The two lists are aligned in order and by how close they are, so a
-   * label the program did not see does not shift every number after it. A
-   * number that has no label near it keeps the position the model gave.
+   * The two lists are aligned by how close they are, so a label the program
+   * did not see does not shift every number after it. A number that has no
+   * label near it keeps the position the model gave.
+   *
+   * The place of a label is only used when it is very close to the place the
+   * model gave. The model reads the place of a tick well, and a block of
+   * text that is not a number can sit next to the bar as well; taking its
+   * middle would move the number to the wrong place.
    *
    * @param {Array} ticks   [{ t, value, label }] as the model read them
    * @param {Array} labels  [{ t, y }] as the program found them
@@ -848,7 +866,7 @@
    */
   function alignTicks(ticks, labels, limit) {
     const list = (labels || []).filter((l) => isFinite(l.t));
-    const maxDistance = limit === undefined ? 0.12 : limit;
+    const maxDistance = limit === undefined ? 0.01 : limit;
     const used = new Set();
     const out = [];
     for (const tick of ticks || []) {
