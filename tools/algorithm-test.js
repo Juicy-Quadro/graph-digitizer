@@ -724,6 +724,34 @@ section('8. Colour bar calibration and field extraction');
   const holeyLong = Exporters.toGridLongCSV(holey, { decimals: 2 });
   check('the long grid skips a cell without a value',
     holeyLong.split('\r\n').length === 4, holeyLong.split('\r\n').length + ' lines');
+
+  // The window that goes to the model has to follow the tick labels to
+  // their end, and it has to be scaled up so that they can be read.
+  const labelled = makeImage(200, 300, (data) => {
+    // A colour bar at x = 160..170.
+    for (let y = 20; y < 280; y++) {
+      for (let x = 160; x < 170; x++) px(data, 200, x, y, 20, 20, 220);
+    }
+    // A tick label printed next to it, ending at x = 196.
+    for (let y = 24; y < 32; y++) {
+      for (let x = 176; x < 196; x++) px(data, 200, x, y, 0, 0, 0);
+    }
+  });
+  const bar = { x: 160, y: 20, w: 10, h: 260 };
+  const extent = ColorBar.labelExtent(labelled, bar);
+  check('the text next to the bar is found', extent.right >= 196, String(extent.right));
+  const window = ColorBar.labelWindow(labelled, bar, { margin: 10 });
+  check('the window holds the whole label',
+    window.x <= 176 && window.x + window.w >= 196, JSON.stringify(window));
+  check('the window holds the whole bar',
+    window.y <= 20 && window.y + window.h >= 280, JSON.stringify(window));
+  const size = ColorBar.modelSize(window.w, window.h, 1400);
+  check('a narrow crop is scaled up for the model',
+    Math.max(size.width, size.height) === 1400 && size.scale > 1,
+    JSON.stringify(size));
+  const keepSize = ColorBar.modelSize(2000, 300, 1400);
+  check('a large crop is not scaled down',
+    keepSize.scale === 1 && keepSize.width === 2000, JSON.stringify(keepSize));
 }
 
 // ---------------------------------------------------------------- summary

@@ -71,44 +71,52 @@ function main() {
   const curveRecords = records.filter((r) => r.curve);
   if (curveRecords.length) {
     const ok = curveRecords.filter((r) => r.curve.ok);
-    const scored = ok.filter((r) => r.curve.deviation);
     const empty = ok.filter((r) => r.curve.points === 0);
+    const withPoints = ok.filter((r) => r.curve.points > 0);
+    const onStructure = withPoints
+      .filter((r) => typeof r.curve.onStructure === 'number')
+      .map((r) => r.curve.onStructure);
+    const coherence = withPoints
+      .filter((r) => typeof r.curve.coherence === 'number')
+      .map((r) => r.curve.coherence);
+    const scored = withPoints.filter((r) => r.curve.deviation);
     say('## Curve extraction');
+    say('');
+    say('The model was asked which curves the figure holds. There is no ground');
+    say('truth for that on a real paper figure, so the measure is whether the');
+    say('points it returned really sit on a drawn line and whether they form');
+    say('one continuous path.');
     say('');
     say('* the model answered: **' + ok.length + ' of ' + curveRecords.length +
       '** (' + (100 * ok.length / curveRecords.length).toFixed(1) + ' percent)');
-    say('* of those, an answer with no point at all: **' + empty.length + '**');
-    say('* answers that could be compared with the reference: **' + scored.length + '**');
+    say('* answers that named no curve at all: **' + empty.length + '**');
+    say('* answers with points: **' + withPoints.length + '**');
+    if (onStructure.length) {
+      const s = stats(onStructure);
+      say('');
+      say('| measure | median | mean | p90 |');
+      say('|---|---|---|---|');
+      say('| share of the points that sit on a drawn line | ' +
+        fmt(s.median * 100, 1) + '% | ' + fmt(s.mean * 100, 1) + '% | ' +
+        fmt(s.p90 * 100, 1) + '% |');
+      const good = onStructure.filter((v) => v > 0.8).length;
+      say('');
+      say('* answers with more than eighty percent of the points on a line: **' +
+        good + ' of ' + onStructure.length + '** (' +
+        (100 * good / onStructure.length).toFixed(1) + ' percent)');
+    }
+    if (coherence.length) {
+      const s = stats(coherence);
+      say('* share of the steps that jump too far (a broken path): median ' +
+        fmt(s.median * 100, 1) + '%, p90 ' + fmt(s.p90 * 100, 1) + '%');
+    }
     if (scored.length) {
-      const means = scored.map((r) => r.curve.deviation.mean);
-      const covers = scored.map((r) => r.curve.deviation.covered);
-      const worsts = scored.map((r) => r.curve.deviation.worst);
-      const s1 = stats(means);
-      const s2 = stats(covers);
-      say('');
-      say('| measure | median | mean | p90 | worst |');
-      say('|---|---|---|---|---|');
-      say('| distance of the points from the reference curve (px) | ' +
-        fmt(s1.median) + ' | ' + fmt(s1.mean) + ' | ' + fmt(s1.p90) + ' | ' + fmt(s1.worst) + ' |');
-      say('| share of the reference the model covered | ' +
-        fmt(s2.median * 100, 1) + '% | ' + fmt(s2.mean * 100, 1) + '% | ' +
-        fmt(s2.p90 * 100, 1) + '% | ' + fmt(s2.worst * 100, 1) + '% |');
-      say('| largest distance of a single point (px) | ' +
-        fmt(stats(worsts).median) + ' | ' + fmt(stats(worsts).mean) + ' | ' +
-        fmt(stats(worsts).p90) + ' | ' + fmt(stats(worsts).worst) + ' |');
-      const good = scored.filter((r) => r.curve.deviation.covered > 0.5).length;
-      const close = scored.filter((r) => r.curve.deviation.mean < 10).length;
-      say('');
-      say('* answers that covered more than half of the reference curve: **' +
-        good + ' of ' + scored.length + '** (' +
-        (100 * good / scored.length).toFixed(1) + ' percent)');
-      say('* answers whose points sit on the curve (mean distance below 10 px): **' +
-        close + ' of ' + scored.length + '** (' +
-        (100 * close / scored.length).toFixed(1) + ' percent)');
+      const s = stats(scored.map((r) => r.curve.deviation.mean));
+      say('* where the classical tracer also found a curve: the mean distance ' +
+        'of the points was ' + fmt(s.mean) + ' px');
     }
     const latencies = curveRecords.map((r) => r.curve.ms);
     if (latencies.length) {
-      say('');
       say('* time per figure: median ' + Math.round(stats(latencies).median) +
         ' ms, p90 ' + Math.round(stats(latencies).p90) + ' ms');
     }
@@ -130,21 +138,33 @@ function main() {
   }
 
   // ---------------------------------------------------------- colour bars
-  const barRecords = records.filter((r) => r.bar);
-  if (barRecords.length) {
+  const barRecords = records.filter((r) => r.bar && !r.bar.skipped);
+  const skipped = records.filter((r) => r.bar && r.bar.skipped);
+  if (barRecords.length || skipped.length) {
+    say('## Colour bar tick reading');
+    say('');
+    if (skipped.length) {
+      say('* figures where the colour bar has no printed labels next to it and');
+      say('  therefore cannot be scored: **' + skipped.length + '**');
+    }
     const ok = barRecords.filter((r) => r.bar.ok);
     const withTicks = ok.filter((r) => r.bar.ticks > 0);
     const withPos = ok.filter((r) => r.bar.positionError !== null && r.bar.positionError !== undefined);
     const withRes = ok.filter((r) => r.bar.residual);
-    say('## Colour bar tick reading');
-    say('');
     say('* the model answered: **' + ok.length + ' of ' + barRecords.length + '**');
     say('* answers with at least one tick: **' + withTicks.length + '**');
     if (withPos.length) {
       const errs = withPos.map((r) => r.bar.positionError);
+      const means = withPos.map((r) => r.bar.positionMean);
       const s = stats(errs);
-      say('* distance of the read tick from the printed label: median ' + fmt(s.median, 1) +
-        ' px, p90 ' + fmt(s.p90, 1) + ' px, worst ' + fmt(s.worst, 1) + ' px');
+      const sm = stats(means);
+      say('* distance of the read tick from the printed label: median ' +
+        fmt(sm.median, 1) + ' px, p90 ' + fmt(sm.p90, 1) + ' px, worst ' +
+        fmt(s.worst, 1) + ' px');
+      const close = withPos.filter((r) => r.bar.positionMean < 12).length;
+      say('* answers whose ticks sit within twelve pixels of the printed ones: **' +
+        close + ' of ' + withPos.length + '** (' +
+        (100 * close / withPos.length).toFixed(1) + ' percent)');
     }
     if (withRes.length) {
       const rel = withRes.map((r) => r.bar.residual.relative).filter((v) => v !== null);
@@ -155,11 +175,28 @@ function main() {
       const clean = withRes.filter((r) => r.bar.residual.relative !== null &&
         r.bar.residual.relative < 0.02).length;
       say('  * answers that sit on a straight line within two percent: **' +
-        clean + ' of ' + withRes.length + '**');
+        clean + ' of ' + withRes.length + '** (' +
+        (100 * clean / withRes.length).toFixed(1) + ' percent)');
     }
     const latencies = barRecords.map((r) => r.bar.ms);
-    say('* time per figure: median ' + Math.round(stats(latencies).median) +
-      ' ms, p90 ' + Math.round(stats(latencies).p90) + ' ms');
+    if (latencies.length) {
+      say('* time per figure: median ' + Math.round(stats(latencies).median) +
+        ' ms, p90 ' + Math.round(stats(latencies).p90) + ' ms');
+    }
+    const errors = barRecords.filter((r) => !r.bar.ok);
+    if (errors.length) {
+      const kinds = {};
+      errors.forEach((r) => {
+        const key = (r.bar.error || 'unknown').slice(0, 60);
+        kinds[key] = (kinds[key] || 0) + 1;
+      });
+      say('');
+      say('### Why the model did not answer');
+      say('');
+      Object.keys(kinds).sort((a, b) => kinds[b] - kinds[a]).forEach((k) => {
+        say('* ' + kinds[k] + ' x ' + k);
+      });
+    }
     say('');
   }
 

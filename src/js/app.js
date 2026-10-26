@@ -1395,38 +1395,39 @@
     toast(t('cloud.extracted', { n: field.count }), 'ok');
   }
 
-  /** A crop of the colour bar with its tick labels, for the vision model. */
+  /**
+   * The crop of the colour bar that the model reads.
+   *
+   * The window follows the tick labels to their end, because a number that
+   * is cut in half cannot be read, and it is scaled up, because a colour
+   * bar is a sliver and the labels of a real figure are only a few pixels
+   * tall.
+   */
   function cropColorBar(rect, orientation) {
-    const src = image.canvas;
-    const canvas = document.createElement('canvas');
-    let x0;
-    let y0;
-    let w;
-    let h;
-    if (orientation === 'horizontal') {
-      const pad = Math.round(rect.h * 2.2);
-      x0 = rect.x;
-      y0 = Math.max(0, rect.y - pad);
-      w = rect.w;
-      h = Math.min(src.height - y0, rect.h + pad * 2);
-    } else {
-      const pad = Math.round(rect.w * 2.2);
-      x0 = Math.max(0, rect.x - pad);
-      y0 = rect.y;
-      w = Math.min(src.width - x0, rect.w + pad * 2);
-      h = rect.h;
-    }
-    canvas.width = Math.max(1, Math.round(w));
-    canvas.height = Math.max(1, Math.round(h));
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(src, Math.round(x0), Math.round(y0), Math.round(w), Math.round(h),
-      0, 0, canvas.width, canvas.height);
+    const window = GD.ColorBar.labelWindow(image.imageData, rect, { margin: 10 });
+    const source = image.canvas;
+    const turned = document.createElement('canvas');
+    turned.width = Math.max(1, Math.round(window.w));
+    turned.height = Math.max(1, Math.round(window.h));
+    const tctx = turned.getContext('2d');
+    tctx.imageSmoothingQuality = 'high';
+    tctx.drawImage(source, window.x, window.y, window.w, window.h, 0, 0, turned.width, turned.height);
+
+    const size = GD.ColorBar.modelSize(turned.width, turned.height, 1400);
+    const final = document.createElement('canvas');
+    final.width = size.width;
+    final.height = size.height;
+    const fctx = final.getContext('2d');
+    fctx.imageSmoothingQuality = 'high';
+    fctx.drawImage(turned, 0, 0, final.width, final.height);
+
     return {
-      dataURL: canvas.toDataURL('image/png'),
-      width: canvas.width,
-      height: canvas.height,
-      offsetX: Math.round(x0),
-      offsetY: Math.round(y0)
+      dataURL: final.toDataURL('image/png'),
+      width: final.width,
+      height: final.height,
+      offsetX: window.x,
+      offsetY: window.y,
+      orientation: orientation
     };
   }
 

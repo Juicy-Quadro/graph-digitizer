@@ -441,10 +441,96 @@
     return false;
   }
 
+  /**
+   * How far the text next to a colour bar reaches.
+   *
+   * The tick labels are printed beside the bar and they are what the model
+   * has to read. A crop that stops in the middle of a number is worse than
+   * no crop at all, so the window has to follow the text to its end.
+   *
+   * @param {ImageData} imageData
+   * @param {object} bar  the rectangle of the bar
+   * @returns {object} { left, right, top, bottom } in image pixels
+   */
+  function labelExtent(imageData, bar) {
+    const w = imageData.width;
+    const h = imageData.height;
+    const data = imageData.data;
+    const limit = 300;
+    let left = bar.x;
+    let right = bar.x + bar.w;
+    const top = Math.max(0, bar.y - 24);
+    const bottom = Math.min(h, bar.y + bar.h + 24);
+
+    const dark = (x, y) => {
+      const p = (y * w + x) * 4;
+      return 0.299 * data[p] + 0.587 * data[p + 1] + 0.114 * data[p + 2] < 125;
+    };
+
+    // To the right of the bar. The whole span is looked at, because the
+    // end of the text is what matters, not where it begins.
+    for (let y = top; y < bottom; y++) {
+      for (let x = bar.x + bar.w; x < Math.min(w, bar.x + bar.w + limit); x++) {
+        if (!dark(x, y)) continue;
+        if (x + 1 > right) right = x + 1;
+      }
+    }
+    // And to its left.
+    for (let y = top; y < bottom; y++) {
+      for (let x = bar.x - 1; x >= Math.max(0, bar.x - limit); x--) {
+        if (!dark(x, y)) continue;
+        if (x < left) left = x;
+      }
+    }
+    return { left: left, right: right, top: top, bottom: bottom };
+  }
+
+  /**
+   * The window that holds the colour bar and its tick labels.
+   *
+   * @param {ImageData} imageData
+   * @param {object} bar
+   * @param {object} options
+   *   margin : free space around the text (default 10)
+   * @returns {object} { x, y, w, h }
+   */
+  function labelWindow(imageData, bar, options) {
+    const opt = options || {};
+    const margin = opt.margin === undefined ? 10 : opt.margin;
+    const extent = labelExtent(imageData, bar);
+    const w = imageData.width;
+    const h = imageData.height;
+    const x = Math.max(0, Math.min(bar.x - 6, extent.left - margin));
+    const y = Math.max(0, Math.min(bar.y - 6, extent.top - margin));
+    const right = Math.min(w, Math.max(bar.x + bar.w + 6, extent.right + margin));
+    const bottom = Math.min(h, Math.max(bar.y + bar.h + 6, extent.bottom + margin));
+    return { x: x, y: y, w: right - x, h: bottom - y };
+  }
+
+  /**
+   * The size a crop is scaled to before it goes to the model.
+   *
+   * A colour bar is a sliver: without scaling the tick labels are a couple
+   * of pixels tall and nothing can be read from them.
+   */
+  function modelSize(width, height, longSide) {
+    const target = longSide || 1400;
+    const longest = Math.max(width, height);
+    const scale = longest < target ? target / longest : 1;
+    return {
+      width: Math.max(1, Math.round(width * scale)),
+      height: Math.max(1, Math.round(height * scale)),
+      scale: scale
+    };
+  }
+
   GD.ColorBar = {
     scanBar,
     buildMap,
     extractField,
-    valueAt
+    valueAt,
+    labelExtent,
+    labelWindow,
+    modelSize
   };
 })(typeof window !== 'undefined' ? window : globalThis);

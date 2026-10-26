@@ -171,12 +171,13 @@ app.whenReady().then(async () => {
       };
       if (res && res.ok && res.series && res.series.length) {
         record.curve.series = res.series.length;
+        // The points of every series on their own, so the continuity is
+        // measured inside a series and not between two of them.
+        const series = res.series.map((line) => (line.points || []).map((p) => [
+          p.x * entry.width, p.y * entry.height
+        ]));
         const points = [];
-        for (const line of res.series) {
-          for (const p of (line.points || [])) {
-            points.push([p.x * entry.width, p.y * entry.height]);
-          }
-        }
+        series.forEach((s) => s.forEach((p) => points.push(p)));
         record.curve.points = points.length;
         // The measure that needs no ground truth: do the points sit on a
         // drawn line, and do they form one path?
@@ -194,13 +195,29 @@ app.whenReady().then(async () => {
           const ctx = canvas.getContext('2d', { willReadFrequently: true });
           ctx.drawImage(img, 0, 0);
           const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-          const points = ${JSON.stringify(points)};
-          const on = BV.onStructure(imageData, points, 40);
-          const coherent = BV.coherence(points, Math.max(12, canvas.width / 25));
-          return { on: on, coherent: coherent };
+          const series = ${JSON.stringify(series)};
+          let on = 0;
+          let total = 0;
+          const jumps = [];
+          let steps = 0;
+          for (const s of series) {
+            const measured = BV.onStructure(imageData, s, 40);
+            on += measured.on;
+            total += measured.count;
+            const coherent = BV.coherence(s, 10);
+            if (coherent) {
+              jumps.push(coherent.jumps);
+              steps += s.length - 1;
+            }
+          }
+          const jumpTotal = jumps.reduce((a, b) => a + b, 0);
+          return {
+            on: total ? on / total : 0,
+            coherent: steps ? jumpTotal / steps : null
+          };
         })()`);
-        record.curve.onStructure = measured.on.ratio;
-        record.curve.coherence = measured.coherent ? measured.coherent.ratio : null;
+        record.curve.onStructure = measured.on;
+        record.curve.coherence = measured.coherent;
         // And the classic reference, where there is one.
         if (entry.curve && entry.curve.points && entry.curve.points.length > 2) {
           const reference = entry.curve.points;
@@ -239,13 +256,44 @@ app.whenReady().then(async () => {
         count++;
         continue;
       }
-      // The model sees the bar and its surroundings.
-      const pad = Math.round(entry.bar.w * 2.2);
-      const x0 = Math.max(0, entry.bar.x - pad);
-      const x1 = Math.min(entry.width, entry.bar.x + entry.bar.w + pad);
-      const y0 = Math.max(0, entry.bar.y);
-      const y1 = Math.min(entry.height, entry.bar.y + entry.bar.h);
-      const crop = cropFigure(dataURL, x0, y0, x1, y1);
+      // The window follows the labels to their end and is scaled up, the
+      // same way the application does it.
+      const crop = await win.webContents.executeJavaScript(`(async () => {
+        const CB = window.GD.ColorBar;
+        const img = new Image();
+        await new Promise((resolve, reject) => {
+          img.onload = resolve;
+          img.onerror = () => reject(new Error('decode failed'));
+          img.src = ${JSON.stringify(dataURL)};
+        });
+        const source = document.createElement('canvas');
+        source.width = img.naturalWidth;
+        source.height = img.naturalHeight;
+        const sctx = source.getContext('2d', { willReadFrequently: true });
+        sctx.drawImage(img, 0, 0);
+        const imageData = sctx.getImageData(0, 0, source.width, source.height);
+        const window = CB.labelWindow(imageData, ${JSON.stringify(entry.bar)}, { margin: 10 });
+        const turned = document.createElement('canvas');
+        turned.width = Math.max(1, Math.round(window.w));
+        turned.height = Math.max(1, Math.round(window.h));
+        const tctx = turned.getContext('2d');
+        tctx.imageSmoothingQuality = 'high';
+        tctx.drawImage(source, window.x, window.y, window.w, window.h, 0, 0, turned.width, turned.height);
+        const size = CB.modelSize(turned.width, turned.height, 1400);
+        const final = document.createElement('canvas');
+        final.width = size.width;
+        final.height = size.height;
+        const fctx = final.getContext('2d');
+        fctx.imageSmoothingQuality = 'high';
+        fctx.drawImage(turned, 0, 0, final.width, final.height);
+        return {
+          dataURL: final.toDataURL('image/png'),
+          width: final.width,
+          height: final.height,
+          offsetX: window.x,
+          offsetY: window.y
+        };
+      })()`);
       const started = Date.now();
       let res = null;
       try {

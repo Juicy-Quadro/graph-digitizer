@@ -372,15 +372,30 @@
     return { count: points.length, on: on, ratio: on / points.length };
   }
 
-  /** Whether the points of the model form one continuous path. */
-  function coherence(points, limit) {
+  /**
+   * Whether the points of the model form one continuous path.
+   *
+   * The model does not return every pixel of a curve, so the distance
+   * between two points can be large. What breaks a path is a step that is
+   * much longer than the others, so the median decides what counts.
+   */
+  function coherence(points, floor) {
     if (!points || points.length < 2) return null;
-    let jumps = 0;
+    const steps = [];
     for (let i = 1; i < points.length; i++) {
-      const d = Math.hypot(points[i][0] - points[i - 1][0], points[i][1] - points[i - 1][1]);
-      if (d > limit) jumps++;
+      steps.push(Math.hypot(points[i][0] - points[i - 1][0], points[i][1] - points[i - 1][1]));
     }
-    return { jumps: jumps, ratio: jumps / (points.length - 1) };
+    const sorted = steps.slice().sort((a, b) => a - b);
+    const median = sorted[Math.floor(sorted.length / 2)];
+    const threshold = Math.max(floor || 0, median * 3);
+    let jumps = 0;
+    for (const s of steps) if (s > threshold) jumps++;
+    return {
+      jumps: jumps,
+      ratio: jumps / steps.length,
+      median: median,
+      threshold: threshold
+    };
   }
 
   root.BenchVision = {
