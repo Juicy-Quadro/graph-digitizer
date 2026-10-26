@@ -587,6 +587,56 @@
       });
   }
 
+  /**
+   * Pairs the numbers the model read with the places where the labels are
+   * printed.
+   *
+   * The two lists are aligned in order and by how close they are, so a
+   * label the program did not see does not shift every number after it. A
+   * number that has no label near it keeps the position the model gave.
+   *
+   * @param {Array} ticks   [{ t, value, label }] as the model read them
+   * @param {Array} labels  [{ t, y }] as the program found them
+   * @param {number} limit  how far a label may be away (in t)
+   * @returns {Array} [{ t, value, label }]
+   */
+  function alignTicks(ticks, labels, limit) {
+    const list = (labels || []).filter((l) => isFinite(l.t));
+    const maxDistance = limit === undefined ? 0.12 : limit;
+    const used = new Set();
+    const out = [];
+    for (const tick of ticks || []) {
+      if (!tick || !isFinite(tick.value)) continue;
+      let best = -1;
+      let bestDistance = Infinity;
+      for (let i = 0; i < list.length; i++) {
+        if (used.has(i)) continue;
+        const d = Math.abs(list[i].t - tick.t);
+        if (d < bestDistance) {
+          bestDistance = d;
+          best = i;
+        }
+      }
+      if (best >= 0 && bestDistance <= maxDistance) {
+        used.add(best);
+        out.push({
+          t: list[best].t,
+          value: tick.value,
+          label: tick.label || '',
+          fromLabel: true
+        });
+      } else if (isFinite(tick.t)) {
+        out.push({
+          t: Math.max(0, Math.min(1, tick.t)),
+          value: tick.value,
+          label: tick.label || '',
+          fromLabel: false
+        });
+      }
+    }
+    return out;
+  }
+
   GD.ColorBar = {
     scanBar,
     buildMap,
@@ -595,6 +645,7 @@
     labelExtent,
     labelWindow,
     modelSize,
-    findTickLabels
+    findTickLabels,
+    alignTicks
   };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -775,6 +775,25 @@ section('8. Colour bar calibration and field extraction');
   check('the second label is near the bottom of the bar',
     labels.length === 2 && Math.abs(labels[1].t - (1 - (238 - 20) / 260)) < 0.02,
     labels.length ? String(labels[1].t) : '');
+
+  // The numbers of the model are paired with the places of the labels.
+  const aligned = ColorBar.alignTicks(
+    [
+      { t: 0.80, value: 80, label: '80' },
+      { t: 0.52, value: 50, label: '50' },
+      { t: 0.20, value: 20, label: '20' }
+    ],
+    [
+      { t: 0.81, y: 30 },
+      { t: 0.50, y: 150 }
+    ],
+    0.12);
+  check('a number takes the place of the label next to it',
+    aligned.length === 3 && Math.abs(aligned[0].t - 0.81) < 1e-6,
+    JSON.stringify(aligned.map((a) => [a.t, a.value, a.fromLabel])));
+  check('a number without a label keeps its own place',
+    aligned.length === 3 && Math.abs(aligned[2].t - 0.20) < 1e-6 && aligned[2].fromLabel === false,
+    JSON.stringify(aligned.map((a) => [a.t, a.value, a.fromLabel])));
 }
 
 // ---------------------------------------------------------------- summary

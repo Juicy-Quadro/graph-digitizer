@@ -1483,7 +1483,6 @@
       toast(t('cloud.aiNoTicks'), 'error');
       return;
     }
-    const anchors = [];
     /*
      * The program knows where the printed labels are, the model knows what
      * they say. A model reads a number well but places it badly, so the
@@ -1494,30 +1493,25 @@
     const printed = GD.ColorBar.findTickLabels(image.imageData, g.bar)
       .filter((l) => l.t >= -0.05 && l.t <= 1.05)
       .sort((a, b) => a.y - b.y);
-    const usePrinted = printed.length === ticks.length;
-    for (let i = 0; i < ticks.length; i++) {
-      const tick = ticks[i];
-      if (!isFinite(tick.value)) continue;
-      let t;
-      if (usePrinted) {
-        t = printed[i].t;
-      } else if (isFinite(tick.position)) {
-        const original = g.orientation === 'horizontal'
-          ? crop.offsetX + tick.position
-          : crop.offsetY + tick.position;
-        t = g.orientation === 'horizontal'
-          ? (original - g.bar.x) / g.bar.w
-          : 1 - (original - g.bar.y) / g.bar.h;
-      } else {
-        continue;
-      }
+    const read = [];
+    for (const tick of ticks) {
+      if (!isFinite(tick.position)) continue;
+      const original = g.orientation === 'horizontal'
+        ? crop.offsetX + tick.position
+        : crop.offsetY + tick.position;
+      const t = g.orientation === 'horizontal'
+        ? (original - g.bar.x) / g.bar.w
+        : 1 - (original - g.bar.y) / g.bar.h;
       if (!isFinite(t)) continue;
-      anchors.push({
-        t: Math.max(0, Math.min(1, t)),
-        value: tick.value,
+      read.push({
+        t: t,
+        value: isFinite(tick.value) ? tick.value : null,
         label: tick.label || ''
       });
     }
+    const anchors = GD.ColorBar.alignTicks(read, printed, 0.12)
+      .filter((a) => isFinite(a.value))
+      .map((a) => ({ t: a.t, value: a.value, label: a.label }));
     if (!anchors.length) {
       toast(t('cloud.aiNoTicks'), 'error');
       return;
