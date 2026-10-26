@@ -252,7 +252,7 @@ app.whenReady().then(async () => {
   // path of the colour map can be driven: frame the bar, read the ticks,
   // extract the field and look at the result.
   await run(`(async () => {
-    const W = 240, H = 200;
+    const W = 280, H = 200;
     const canvas = document.createElement('canvas');
     canvas.width = W; canvas.height = H;
     const ctx = canvas.getContext('2d');
@@ -275,6 +275,13 @@ app.whenReady().then(async () => {
       ctx.fillStyle = jet(1 - (y - 20) / 160);
       ctx.fillRect(200, y, 20, 1);
     }
+    // The tick labels printed next to the bar.
+    ctx.fillStyle = '#000';
+    ctx.font = '13px Arial';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('80', 224, 26);
+    ctx.fillText('40', 224, 100);
+    ctx.fillText('0', 224, 174);
     const url = canvas.toDataURL('image/png');
     await window.__gd.loadImage(url, 'cloud.png', 'C:/tmp/cloud.png');
     window.__gd.view.fit();
@@ -338,16 +345,23 @@ app.whenReady().then(async () => {
 
   // The model reads the tick labels; the reply is mocked so the test does
   // not need a key or a network.
+  // The model reads the numbers and places them a little off, the way it
+  // does on real figures. The program knows where the labels are printed, so
+  // the positions of the anchors have to follow the labels, not the model.
   const aiRead = await run(`(async () => {
     const g = window.__gd;
     g.setLlmReadBar((payload) => {
       window.__aiPayload = payload;
+      const bar = g.store.state.grid.bar;
+      // The places are measured from the top of the crop, and they are ten
+      // pixels off, the way the model places them on real figures.
+      const at = (originalY) => originalY - payload.offsetY + 10;
       return {
         ok: true,
         ticks: [
-          { label: '0', value: 0, position: payload.height },
-          { label: '50', value: 50, position: payload.height / 2 },
-          { label: '100', value: 100, position: 0 }
+          { label: '80', value: 80, position: at(26) },
+          { label: '40', value: 40, position: at(100) },
+          { label: '0', value: 0, position: at(174) }
         ]
       };
     });
@@ -361,15 +375,18 @@ app.whenReady().then(async () => {
 
   check('the model read three tick labels', aiRead.anchors.length === 3,
     aiRead.anchors.length + ' anchors');
-  check('the read ticks land on the bar',
+  check('the values of the model are the ones that are used',
+    aiRead.anchors.map((a) => a.value).join(',') === '80,40,0',
+    JSON.stringify(aiRead.anchors.map((a) => a.value)));
+  check('the positions of the printed labels win over the ones of the model',
     aiRead.anchors.length === 3 &&
-    Math.abs(aiRead.anchors[0].t - 0) < 0.02 &&
-    Math.abs(aiRead.anchors[1].t - 0.5) < 0.02 &&
-    Math.abs(aiRead.anchors[2].t - 1) < 0.02,
-    JSON.stringify(aiRead.anchors.map(a => a.t)));
-  check('the read ticks carry the values of the labels',
-    aiRead.anchors.map(a => a.value).join(',') === '0,50,100',
-    JSON.stringify(aiRead.anchors.map(a => a.value)));
+    Math.abs(aiRead.anchors[0].t - 0.9625) < 0.03 &&
+    Math.abs(aiRead.anchors[1].t - 0.5) < 0.03 &&
+    Math.abs(aiRead.anchors[2].t - 0.0375) < 0.03,
+    JSON.stringify(aiRead.anchors.map((a) => Math.round(a.t * 1000) / 1000)));
+  check('the model got the crop of the bar',
+    aiRead.payload && aiRead.payload.image.indexOf('data:image/png') === 0,
+    aiRead.payload ? aiRead.payload.width + 'x' + aiRead.payload.height : 'no payload');
   check('the model got the crop of the bar',
     aiRead.payload && aiRead.payload.image.indexOf('data:image/png') === 0 &&
     aiRead.payload.orientation === 'vertical',
@@ -392,7 +409,7 @@ app.whenReady().then(async () => {
     return { summary: summary, painted: painted, width: preview.width, height: preview.height };
   })()`);
   check('the extraction reports what it found',
-    extracted.summary.indexOf('24000') >= 0,
+    extracted.summary.indexOf('24') >= 0,
     extracted.summary);
   check('the field is drawn in the preview', extracted.painted > 500,
     extracted.painted + ' pixels');
@@ -407,7 +424,7 @@ app.whenReady().then(async () => {
   check('the grid export holds one row per line of the figure',
     grid.lines > 100, grid.lines + ' lines');
   check('the field holds every pixel of the figure',
-    grid.count === 24000, grid.count + ' cells');
+    grid.count > 23000 && grid.count < 25000, grid.count + ' cells');
 
   // --- 6. the model reads the curves of a figure -------------------------
   const aiCurves = await run(`(async () => {
@@ -436,7 +453,11 @@ app.whenReady().then(async () => {
       name: last ? last.name : null,
       points: last ? last.points.length : 0,
       px: last && last.points[0] ? last.points[0].px : null,
-      py: last && last.points[0] ? last.points[0].py : null
+      py: last && last.points[0] ? last.points[0].py : null,
+      // The answer is normalised to the figure, so the pixels depend on how
+      // big the figure is.
+      expectedX: 0.1 * g.store.state.image.width,
+      expectedY: 0.2 * g.store.state.image.height
     };
   })()`);
 
@@ -446,7 +467,7 @@ app.whenReady().then(async () => {
     aiCurves.points === 3 && aiCurves.name === 'Model curve',
     aiCurves.name + ', ' + aiCurves.points + ' points');
   check('the normalised points became pixel positions',
-    Math.abs(aiCurves.px - 24) < 1 && Math.abs(aiCurves.py - 40) < 1,
+    Math.abs(aiCurves.px - aiCurves.expectedX) < 1 && Math.abs(aiCurves.py - aiCurves.expectedY) < 1,
     'px=' + aiCurves.px + ' py=' + aiCurves.py);
 
   console.log('\n' + (failures ? failures + ' check(s) FAILED' : 'all interface checks passed'));

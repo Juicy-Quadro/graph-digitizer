@@ -537,14 +537,35 @@
    */
   function findTickLabels(imageData, bar) {
     if (!bar) return [];
+    // The labels are printed next to the bar. They are usually on its right
+    // hand side; when there is nothing there, the left hand side is tried,
+    // because a figure may put the bar on the left of the plot.
+    const right = labelBlocksOnSide(imageData, bar, 1);
+    if (right.length) return right;
+    return labelBlocksOnSide(imageData, bar, -1);
+  }
+
+  /** The blocks of text on one side of a colour bar. */
+  function labelBlocksOnSide(imageData, bar, side) {
     const w = imageData.width;
     const h = imageData.height;
     const data = imageData.data;
-    const x0 = bar.x + bar.w + 18;
-    const x1 = Math.min(w, x0 + 170);
+    const span = 170;
+    let x0;
+    let x1;
+    if (side > 0) {
+      // The gap is small, because the labels are often printed right next
+      // to the bar, and a wider gap would cut them off.
+      x0 = bar.x + bar.w + 2;
+      x1 = Math.min(w, x0 + span);
+    } else {
+      x1 = bar.x - 2;
+      x0 = Math.max(0, x1 - span);
+    }
+    if (x1 <= x0) return [];
     const y0 = Math.max(0, bar.y - 40);
     const y1 = Math.min(h, bar.y + bar.h + 40);
-    if (x1 <= x0 || y1 <= y0) return [];
+    if (y1 <= y0) return [];
 
     const dark = [];
     for (let y = y0; y < y1; y++) {

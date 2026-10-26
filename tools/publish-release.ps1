@@ -36,9 +36,44 @@ $portable = $portable.FullName
 $notes = @'
 ## Graph Digitizer __VERSION__
 
-Digitise data points out of graphs and plots in images.
+Digitise data points out of graphs and plots in images, and the colours of a
+contour map into numbers.
 
-### What is new in 1.3.2
+### What is new in 1.4.0
+
+A benchmark of the model on **hundreds of real figures from arXiv papers** went
+looking for weak spots, and it found three. All three are fixed.
+
+- **The model could not read the tick labels of a real colour bar.** The
+  window that goes to the model cut the numbers in half, and a colour bar is a
+  sliver, so the labels were a couple of pixels tall after the picture was
+  scaled down. The window now follows the text to its end and the crop is
+  scaled up so that the long side reaches 1400 pixels. The bar keeps its
+  direction, because the labels are printed the same way as the bar and
+  turning the picture would turn the text as well. With that the model read
+  the labels of a real bar and worked out the pixel positions itself.
+- **The model reads the numbers well but places them badly.** On real colour
+  bars the numbers it read were straight to within 0.01 to 0.11 percent of
+  the range, while the positions were 24 to 63 pixels off - which is more
+  than ten units of value. So the roles are swapped: the program finds the
+  printed labels, which it can do exactly, and the model only supplies the
+  numbers. The two lists are paired one by one, so a label the program did
+  not see does not shift every number after it.
+- **The classical tracer is nearly useless on real paper figures.** Out of
+  four hundred figures it followed a curve in one: the axes, the grid and the
+  text all end up in the mask, and the walk leaves the curve at once. This is
+  exactly where the model earns its keep.
+
+The benchmark itself is part of the project. The figures are taken from the
+source packages of the papers, so the originals are used and not a rasterised
+copy of the page:
+
+    python tools/bench_fetch.py --count 400 --papers 140
+    electron tools/bench-reference.js
+    electron tools/bench-llm.js --task bar
+    node tools/bench-report.js
+
+### What was new in 1.3.2
 
 The readme now shows what the application actually does: the colour map
 extraction with its framed bar, its tick values and the field it recovered,
@@ -49,36 +84,6 @@ settings with the key of the model.
   languages.
 - The colour map panel is shown from the framing of the bar to the exported
   grid, so the whole path is visible in one picture.
-
-The release of 1.3.1 carries the two fixes that the real paper figures
-found. They are worth repeating here, because they change the numbers you
-get:
-
-- **The colour lookup was too coarse.** It used a fixed 32 x 32 x 32 table of
-  colours, and one cell of that table is eight units of colour - more than
-  fifty pixels of a colour bar that is eighteen hundred pixels long. The
-  colour of a pixel was therefore matched to the wrong band and the number
-  came out about two percent off. The lookup now searches for the exact
-  nearest band, and the error is below one percent of the value range.
-- **The tick labels of a colour bar usually do not reach its ends.** On a
-  real figure the labels only cover the middle of the bar, and the values
-  outside the known labels were held flat, which reports the same number
-  for a whole part of the figure. They are now continued along the line of
-  the nearest two labels.
-
-Measured on four panels with a colour bar taken from arXiv 2601.00342,
-covering a jet map, a diverging map and labels that stop in the middle of
-the bar:
-
-| panel | colour map | tick labels | error |
-|---|---|---|---|
-| uv_a1 | jet | 5 / 0 / -5 (1e-1) | 0.77 percent of the range |
-| uv_a2 | jet | 5 / 0 / -5 (1e-1) | 0.77 percent of the range |
-| uv_a3 | diverging | 1 / 0 (1e-6) | 1.72 percent of the range |
-| uv_b1 | jet | -6 / -7 (1e-2) | 0.73 percent of the range |
-
-The largest error is at the flat end of a colour map, where the colour
-simply does not tell the number.
 
 ### What was new in 1.3.1
 
@@ -199,7 +204,7 @@ below 1e-13 px.
 
 ### Regression suites
 
-Eight executable suites, 179 assertions in total:
+Eight executable suites, 193 assertions in total:
 
     node tools/run-tests.js
 
