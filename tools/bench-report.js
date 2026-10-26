@@ -205,6 +205,31 @@ function main() {
         clean + ' of ' + withRes.length + '** (' +
         (100 * clean / withRes.length).toFixed(1) + ' percent)');
     }
+    /*
+     * The straight line only means something on a bar that is linear. A
+     * logarithmic bar and a bar that is split into parts are not straight,
+     * and on those the measure says nothing at all. They are told apart by
+     * the numbers of the model, which are on a straight line only when the
+     * bar is.
+     */
+    const straight = withRes.filter((r) => r.bar.residual &&
+      r.bar.residual.relative !== null && r.bar.residual.relative < 0.02);
+    if (straight.length) {
+      const rel = straight.map((r) => r.bar.residual.relative);
+      const s = stats(rel);
+      const pr = straight.filter((r) => r.bar.residualPrinted);
+      say('* on the bars that are straight, which is where the measure means something:');
+      say('  * with the positions of the model: median ' + fmt(s.median * 100, 3) +
+        ' percent of the range, worst ' + fmt(s.worst * 100, 3) + ' percent');
+      if (pr.length) {
+        const sp = stats(pr.map((r) => r.bar.residualPrinted.relative));
+        say('  * with the positions the program found: median ' +
+          fmt(sp.median * 100, 3) + ' percent of the range, worst ' +
+          fmt(sp.worst * 100, 3) + ' percent');
+      }
+      say('  * the other ' + (withRes.length - straight.length) + ' bars are not straight' +
+        ' (a logarithmic or a split bar), so the measure says nothing about them');
+    }
     const printed = withRes.filter((r) => r.bar.residualPrinted);
     if (printed.length) {
       const rel = printed.map((r) => r.bar.residualPrinted.relative).filter((v) => v !== null);
