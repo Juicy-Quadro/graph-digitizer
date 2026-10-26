@@ -340,19 +340,24 @@ src/
       canvas.js    画布渲染与交互
       table.js     虚拟化数据表
 tools/
-  algorithm-test.js        算法测试
-  llm-test.js              模型提示词与解析测试
-  cross-check.js           跨层一致性检查
-  theme-test.js            主题回归
-  experience-test.js       交互体验回归
-  smoke-test.js            真实主进程冒烟测试
-  ui-test.js               指针手势、选中态与云图回归
-  paper-test.js            真实论文图回归
-  bench_fetch.py           取论文图
-  bench-reference.js       经典算法基准线
-  bench-llm.js             模型评测
-  bench-report.js          评测汇总
-  capture.js               自动截图
+  run-tests.js               跑全部八套回归
+  algorithm-test.js          算法测试
+  llm-test.js                模型提示词与解析测试
+  cross-check.js             跨层一致性检查
+  theme-test.js              主题回归
+  experience-test.js         交互体验回归
+  smoke-test.js              真实主进程冒烟测试
+  ui-test.js                 指针手势、选中态与云图回归
+  paper-test.js              真实论文图回归
+  build_fixtures.py          从 GetData 样例生成真值夹具
+  fetch_paper_figures.py     取真实 arXiv 论文图
+  bench_fetch.py             取论文图（评测用）
+  bench-reference.js         经典算法基准线
+  bench-llm.js               模型评测
+  bench-report.js            评测汇总
+  bench-labels.js            刻度标签定位对比（不用模型）
+  bench-labels-look.js       把两边的标签画到图上核对
+  capture.js                 自动截图
 build/icon.ico            应用图标
 docs/
   CHANGELOG.md             更新记录
