@@ -50,6 +50,32 @@ function main() {
     .filter((l) => l.trim())
     .map((l) => JSON.parse(l));
 
+  /*
+   * A figure can be in the file more than once, when the way it was
+   * measured changed. The newest answer is the one that counts, and the
+   * two tasks are kept apart, so a figure that was measured for its colour
+   * bar and for its curves keeps both.
+   */
+  const byFile = new Map();
+  for (const r of records) {
+    let m = byFile.get(r.file);
+    if (!m) {
+      m = {
+        file: r.file,
+        paper: r.paper,
+        category: r.category,
+        width: r.width,
+        height: r.height,
+        hasBar: r.hasBar,
+        labels: r.labels
+      };
+      byFile.set(r.file, m);
+    }
+    if (r.curve) m.curve = r.curve;
+    if (r.bar) m.bar = r.bar;
+  }
+  const figures = Array.from(byFile.values());
+
   const lines = [];
   const say = (s) => {
     console.log(s);
@@ -62,13 +88,13 @@ function main() {
   say('reference is what the ordinary algorithm finds in the same figure: the');
   say('colour that stands out is traced, and the colour bar is measured.');
   say('');
-  say('* figures measured: **' + records.length + '**');
-  say('* with a traceable curve: **' + records.filter((r) => r.hasReference).length + '**');
-  say('* with a colour bar: **' + records.filter((r) => r.hasBar).length + '**');
+  say('* figures measured: **' + figures.length + '**');
+  say('* with a traceable curve: **' + figures.filter((r) => r.hasReference).length + '**');
+  say('* with a colour bar: **' + figures.filter((r) => r.hasBar).length + '**');
   say('');
 
   // ---------------------------------------------------------- curves
-  const curveRecords = records.filter((r) => r.curve);
+  const curveRecords = figures.filter((r) => r.curve);
   if (curveRecords.length) {
     const ok = curveRecords.filter((r) => r.curve.ok);
     const empty = ok.filter((r) => r.curve.points === 0);
@@ -138,8 +164,8 @@ function main() {
   }
 
   // ---------------------------------------------------------- colour bars
-  const barRecords = records.filter((r) => r.bar && !r.bar.skipped);
-  const skipped = records.filter((r) => r.bar && r.bar.skipped);
+  const barRecords = figures.filter((r) => r.bar && !r.bar.skipped);
+  const skipped = figures.filter((r) => r.bar && r.bar.skipped);
   if (barRecords.length || skipped.length) {
     say('## Colour bar tick reading');
     say('');
@@ -211,7 +237,7 @@ function main() {
 
   // ---------------------------------------------------------- by category
   const byCategory = {};
-  records.forEach((r) => {
+  figures.forEach((r) => {
     const key = r.category || 'unknown';
     byCategory[key] = byCategory[key] || { total: 0, ok: 0, covered: 0, scored: 0 };
     byCategory[key].total++;

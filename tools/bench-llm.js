@@ -25,6 +25,7 @@
 const { app, nativeImage } = require('electron');
 const { createTestWindow } = require('./lib/test-window');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 
 const root = path.join(__dirname, '..');
@@ -33,6 +34,11 @@ const figuresDir = path.join(benchDir, 'figures');
 const manifestFile = path.join(benchDir, 'manifest.json');
 const resultsFile = path.join(benchDir, 'results.jsonl');
 const visionFile = path.join(__dirname, 'bench-vision.js');
+
+// The benchmark keeps its own key, in its own folder, so that it never
+// touches the key of the application and two runs cannot delete each
+// other's key.
+app.setPath('userData', path.join(os.tmpdir(), 'gd-benchmark-' + Date.now()));
 const llm = require(path.join(root, 'electron', 'llm.js'));
 
 function arg(name, fallback) {
@@ -45,6 +51,49 @@ const only = arg('only', '');
 const task = arg('task', 'both');
 const wantCurves = task === 'both' || task === 'curve';
 const wantBar = task === 'both' || task === 'bar';
+
+/**
+ * Where the places of the tick labels come from.
+ *
+ * The labels of the application are the ones the answer is used with, so the
+ * measurement has to be made with them.
+ */
+const BAR_SOURCE = 'app';
+
+/**
+ * Pairs the numbers the model read with the places where the labels are
+ * printed, the way the application does it.
+ *
+ * @param {Array} ticks   [{ t, value }] as the model read them
+ * @param {Array} labels  [{ t, y }] as the program found them
+ * @param {number} limit  how far a label may be away (in t)
+ * @returns {Array} [{ t, value }]
+ */
+function alignTicks(ticks, labels, limit) {
+  const list = labels || [];
+  const maxDistance = limit === undefined ? 0.12 : limit;
+  const used = new Set();
+  const out = [];
+  for (const tick of ticks || []) {
+    let best = -1;
+    let bestDistance = Infinity;
+    for (let i = 0; i < list.length; i++) {
+      if (used.has(i)) continue;
+      const d = Math.abs(list[i].t - tick.t);
+      if (d < bestDistance) {
+        bestDistance = d;
+        best = i;
+      }
+    }
+    if (best >= 0 && bestDistance <= maxDistance) {
+      used.add(best);
+      out.push({ t: list[best].t, value: tick.value });
+    } else if (isFinite(tick.t)) {
+      out.push({ t: Math.max(0, Math.min(1, tick.t)), value: tick.value });
+    }
+  }
+  return out;
+}
 
 /** How far the read tick values are from a straight line against the position. */
 function affineResidual(pairs) {
@@ -109,15 +158,22 @@ app.whenReady().then(async () => {
   await llm.saveKey(key);
 
   const manifest = JSON.parse(fs.readFileSync(manifestFile, 'utf8')).figures || [];
-  const done = new Set();
+  /*
+   * The figures that were measured already. A run that was interrupted can
+   * go on where it stopped, and the answer of a figure is never asked for
+   * twice. The colour bar carries the place its labels came from, so a
+   * measurement that used the labels of the reference is measured again now
+   * that the application finds them itself.
+   */
+  const doneCurve = new Set();
+  const doneBar = new Set();
   if (fs.existsSync(resultsFile)) {
     fs.readFileSync(resultsFile, 'utf8').split('\n').forEach((line) => {
       if (!line.trim()) return;
       try {
         const record = JSON.parse(line);
-        // A figure counts as done when the task it was measured for is done.
-        if (record.curve || record.bar) done.add(record.file + ':' +
-          (record.curve ? 'c' : '') + (record.bar ? 'b' : ''));
+        if (record.curve) doneCurve.add(record.file);
+        if (record.bar && record.bar.source === BAR_SOURCE) doneBar.add(record.file);
       } catch (err) {
         void err;
       }
@@ -134,6 +190,10 @@ app.whenReady().then(async () => {
   for (const entry of manifest) {
     if (limit && count >= limit) break;
     if (only && entry.file.indexOf(only) < 0 && entry.paper.indexOf(only) < 0) continue;
+    // A figure that was measured already is not measured again.
+    const needCurve = wantCurves && !doneCurve.has(entry.file);
+    const needBar = wantBar && !doneBar.has(entry.file);
+    if (!needCurve && !needBar) continue;
     const file = path.join(figuresDir, entry.file);
     if (!fs.existsSync(file)) continue;
     const dataURL = 'data:image/jpeg;base64,' + fs.readFileSync(file).toString('base64');
@@ -145,12 +205,10 @@ app.whenReady().then(async () => {
       width: entry.width,
       height: entry.height,
       hasBar: !!entry.bar,
-      labels: (entry.labels || []).length,
-      curve: null,
-      bar: null
+      labels: (entry.labels || []).length
     };
 
-    if (wantCurves) {
+    if (needCurve) {
       const started = Date.now();
       let res = null;
       try {
@@ -246,18 +304,11 @@ app.whenReady().then(async () => {
       }
     }
 
-    if (wantBar && entry.bar) {
-      // Only the figures whose colour bar really has printed labels next to
-      // it can be scored, so only those are worth a call.
-      const inside = (entry.labels || []).filter((l) => l.t >= 0 && l.t <= 1);
-      if (inside.length < 2) {
-        record.bar = { skipped: 'no_verifiable_labels' };
-        out.write(JSON.stringify(record) + '\n');
-        count++;
-        continue;
-      }
+    if (needBar && entry.bar) {
       // The window follows the labels to their end and is scaled up, the
-      // same way the application does it.
+      // same way the application does it. The labels are found by the
+      // application itself, because that is the code the answer is used
+      // with: the labels of the reference are only a second opinion.
       const crop = await win.webContents.executeJavaScript(`(async () => {
         const CB = window.GD.ColorBar;
         const img = new Image();
@@ -273,6 +324,7 @@ app.whenReady().then(async () => {
         sctx.drawImage(img, 0, 0);
         const imageData = sctx.getImageData(0, 0, source.width, source.height);
         const crop = CB.labelWindow(imageData, ${JSON.stringify(entry.bar)}, { margin: 10 });
+        const labels = CB.findTickLabels(imageData, ${JSON.stringify(entry.bar)}, { orientation: 'vertical' });
         const turned = document.createElement('canvas');
         turned.width = Math.max(1, Math.round(crop.w));
         turned.height = Math.max(1, Math.round(crop.h));
@@ -290,10 +342,21 @@ app.whenReady().then(async () => {
           dataURL: final.toDataURL('image/png'),
           width: final.width,
           height: final.height,
+          scale: size.scale,
           offsetX: crop.x,
-          offsetY: crop.y
+          offsetY: crop.y,
+          labels: labels.map((l) => ({ y: l.y, t: l.t }))
         };
       })()`);
+      // Only the figures whose colour bar really has printed labels next to
+      // it can be scored, so only those are worth a call.
+      const inside = (crop.labels || []).filter((l) => l.t >= -0.05 && l.t <= 1.05);
+      if (inside.length < 2) {
+        record.bar = { skipped: 'no_verifiable_labels', source: BAR_SOURCE };
+        out.write(JSON.stringify(record) + '\n');
+        count++;
+        continue;
+      }
       const started = Date.now();
       let res = null;
       try {
@@ -314,14 +377,20 @@ app.whenReady().then(async () => {
         ms: Date.now() - started,
         ticks: 0,
         positionError: null,
-        residual: null
+        residual: null,
+        source: BAR_SOURCE
       };
       if (res && res.ok && res.ticks && res.ticks.length) {
         record.bar.ticks = res.ticks.length;
+        const printed = (crop.labels || [])
+          .filter((l) => l.t >= -0.05 && l.t <= 1.05)
+          .sort((a, b) => a.y - b.y);
         const pairs = [];
         for (const tick of res.ticks) {
           if (!isFinite(tick.position) || !isFinite(tick.value)) continue;
-          const original = crop.offsetY + tick.position;
+          // The model measured the tick in the picture it saw, which is the
+          // crop scaled up, so the scale has to come off again.
+          const original = crop.offsetY + tick.position / (crop.scale || 1);
           const t = 1 - (original - entry.bar.y) / entry.bar.h;
           pairs.push({ t: t, value: tick.value, original: original });
         }
@@ -332,7 +401,7 @@ app.whenReady().then(async () => {
           let n = 0;
           for (const p of pairs) {
             let near = Infinity;
-            for (const label of (entry.labels || [])) {
+            for (const label of printed) {
               near = Math.min(near, Math.abs(label.y - p.original));
             }
             if (isFinite(near)) {
@@ -352,13 +421,9 @@ app.whenReady().then(async () => {
           }));
           // The way the application uses the answer: the program supplies
           // the positions and the model only the numbers.
-          const printed = (entry.labels || [])
-            .filter((l) => l.t >= -0.05 && l.t <= 1.05)
-            .sort((a, b) => a.y - b.y);
-          if (printed.length === pairs.length) {
-            const matched = pairs.map((p, i) => ({ t: printed[i].t, value: p.value }));
-            record.bar.residualPrinted = affineResidual(matched);
-          }
+          const matched = alignTicks(pairs, printed, 0.12);
+          record.bar.residualPrinted = affineResidual(matched);
+          record.bar.printed = matched.map((m) => Math.round(m.t * 1000) / 1000);
         }
       }
     }
@@ -370,7 +435,8 @@ app.whenReady().then(async () => {
     }
   }
   out.end();
-  await llm.forgetKey();
+  // The key of the benchmark is left in its own folder, so a second run can
+  // go on without setting it again.
   console.log('%d figures measured' % count);
   app.exit(0);
 });
