@@ -39,6 +39,28 @@ $notes = @'
 Digitise data points out of graphs and plots in images, and the colours of a
 contour map into numbers.
 
+### What is new in 1.5.0
+
+**Fewer steps to the numbers.**
+
+- **The inspector has three pages now** - curves, cloud map and export - and only the
+  page in use is shown. The six panels that were stacked on top of each other
+  meant that the cloud map and the export were two scrolls away from the
+  settings that were of use at the moment.
+- **The panel of the tool in the hand is shown with the curve settings**, and it is
+  put in front. The tracing and the area sampling have a panel each, and only the
+  one that belongs to the tool is shown.
+- **The colours of the figure are found when it is opened**, so the two colour
+  tools do not have to be used first. The result is drawn over the figure as a
+  mask, so a wrong guess is visible at once, and the tools pick the colours
+  again when it is wrong.
+- **The field of a contour map is taken out as soon as the model has read the
+  ticks**, and the data table has an export button of its own, so the export
+  settings do not have to be looked up first.
+
+The readme now holds the features and the way to use them. The history of the
+versions moved to docs/CHANGELOG.md.
+
 ### What is new in 1.4.2
 
 The benchmark was run again on the real figures, and it found four more

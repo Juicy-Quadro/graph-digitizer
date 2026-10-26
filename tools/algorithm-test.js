@@ -863,12 +863,12 @@ section('8. Colour bar calibration and field extraction');
       { t: 0.20, value: 20, label: '20' }
     ],
     [
-      { t: 0.805, y: 30 },
-      { t: 0.515, y: 150 }
+      { t: 0.801, y: 30 },
+      { t: 0.5205, y: 150 }
     ],
-    0.01);
+    0.002);
   check('a number takes the place of the label next to it',
-    aligned.length === 3 && Math.abs(aligned[0].t - 0.805) < 1e-6,
+    aligned.length === 3 && Math.abs(aligned[0].t - 0.801) < 1e-6,
     JSON.stringify(aligned.map((a) => [a.t, a.value, a.fromLabel])));
   check('a number without a label keeps its own place',
     aligned.length === 3 && Math.abs(aligned[2].t - 0.20) < 1e-6 && aligned[2].fromLabel === false,
@@ -879,7 +879,7 @@ section('8. Colour bar calibration and field extraction');
   const far = ColorBar.alignTicks(
     [{ t: 0.52, value: 50, label: '50' }],
     [{ t: 0.50, y: 150 }],
-    0.01);
+    0.002);
   check('a label that is too far away is left alone',
     far.length === 1 && Math.abs(far[0].t - 0.52) < 1e-6 && far[0].fromLabel === false,
     JSON.stringify(far));

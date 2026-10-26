@@ -850,14 +850,14 @@
    * Pairs the numbers the model read with the places where the labels are
    * printed.
    *
-   * The two lists are aligned by how close they are, so a label the program
-   * did not see does not shift every number after it. A number that has no
-   * label near it keeps the position the model gave.
-   *
-   * The place of a label is only used when it is very close to the place the
-   * model gave. The model reads the place of a tick well, and a block of
-   * text that is not a number can sit next to the bar as well; taking its
+   * The model reads the place of a tick well, so its place is kept and the
+   * printed label is only used to straighten it out a little. The label is
+   * taken over only when the two are very close, because a block of text
+   * that is no number can stand next to the bar as well, and taking its
    * middle would move the number to the wrong place.
+   *
+   * A tick the model gave no place for takes the place of the label that
+   * is nearest to it.
    *
    * @param {Array} ticks   [{ t, value, label }] as the model read them
    * @param {Array} labels  [{ t, y }] as the program found them
@@ -866,7 +866,7 @@
    */
   function alignTicks(ticks, labels, limit) {
     const list = (labels || []).filter((l) => isFinite(l.t));
-    const maxDistance = limit === undefined ? 0.01 : limit;
+    const maxDistance = limit === undefined ? 0.002 : limit;
     const used = new Set();
     const out = [];
     for (const tick of ticks || []) {

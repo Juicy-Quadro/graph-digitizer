@@ -1579,7 +1579,7 @@
         label: tick.label || ''
       });
     }
-    const anchors = GD.ColorBar.alignTicks(read, printed, 0.01)
+    const anchors = GD.ColorBar.alignTicks(read, printed, 0.002)
       .filter((a) => isFinite(a.value))
       .map((a) => ({ t: a.t, value: a.value, label: a.label }));
     if (!anchors.length) {

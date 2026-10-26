@@ -69,7 +69,7 @@ const wantBar = task === 'both' || task === 'bar';
  * the labels are found changes, so that the older measurements are made
  * again.
  */
-const BAR_SOURCE = 'app3';
+const BAR_SOURCE = 'app4';
 
 /**
  * Pairs the numbers the model read with the places where the labels are
@@ -432,7 +432,7 @@ app.whenReady().then(async () => {
           }));
           // The way the application uses the answer: the program supplies
           // the positions and the model only the numbers.
-          const matched = alignTicks(pairs, printed, 0.01);
+          const matched = alignTicks(pairs, printed, 0.002);
           record.bar.residualPrinted = affineResidual(matched);
           record.bar.printed = matched.map((m) => Math.round(m.t * 1000) / 1000);
         }
