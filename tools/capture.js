@@ -119,6 +119,9 @@ app.whenReady().then(async () => {
     cx.fillText('0', 440, 292);
     await g.loadImage(c.toDataURL('image/png'), 'contour.png', 'C:/tmp/contour.png');
     g.view.fit();
+    // The page of the inspector that holds the colour map is opened first.
+    const cloudTab = document.querySelector('.itab[data-itab="cloud"]');
+    if (cloudTab) cloudTab.click();
     g.setLlmReadBar(() => ({
       ok: true,
       ticks: [
@@ -150,8 +153,10 @@ app.whenReady().then(async () => {
     const panel = document.querySelector('[data-panel="cloud"]');
     if (panel) panel.scrollIntoView({ block: 'start' });
     await new Promise((r) => setTimeout(r, 200));
-    ` : ''}
-    ${scene === 'cloudresult' ? `
+    ` : ''}    ${scene === 'cloudresult' ? `
+    // The page of the inspector that holds the colour map is opened first.
+    const cloudTab = document.querySelector('.itab[data-itab="cloud"]');
+    if (cloudTab) cloudTab.click();
     // The lower half of the colour map panel: the field, its numbers and
     // the exports.
     const W = 520, H = 360;

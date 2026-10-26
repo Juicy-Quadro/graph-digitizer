@@ -16,8 +16,8 @@
       'app.openSubtitle': 'Point it at a graph, a plot or a map and turn the curve into a data table.',
       'qs.scaleTitle': 'Set the scale',
       'qs.scaleBody': 'Click the four axis ends, then type the real values.',
-      'qs.pickTitle': 'Pick the curve colour',
-      'qs.pickBody': 'One click on the curve, one click on the background.',
+      'qs.pickTitle': 'The curve colour',
+      'qs.pickBody': 'It is found by itself when the figure opens. Pick it by hand if it is wrong.',
       'qs.digitizeTitle': 'Digitise',
       'qs.digitizeBody': 'Auto trace a solid line, or sample a region on a grid.',
 
@@ -82,6 +82,8 @@
       'panel.area': 'Area Sampling',
       'panel.export': 'Export',
       'panel.series': 'Series',
+      'panel.curves': 'Curves',
+      'panel.tabHint': 'The panel of the tool you are using is shown here.',
 
       'calib.point': 'Point',
       'calib.pixel': 'Pixel',
@@ -158,6 +160,7 @@
       'status.selected': '{n} selected',
 
       'msg.imageLoaded': 'Loaded {name} ({w}×{h})',
+      'msg.autoColours': 'curve and background colour detected',
       'msg.tiffUnsupported': 'This build cannot read TIFF files. Convert the image to PNG or JPG first.',
       'msg.noImage': 'Open an image first.',
       'msg.calibNeeded': 'Set the scale before digitizing.',
@@ -249,6 +252,7 @@
       'cloud.noKey': 'No AI key yet. Add one in the settings.',
       'cloud.noAi': 'The AI bridge is not available in this build.',
       'sample.aiHint': 'The model reads the curves of the figure and returns them as a new series.',
+      'sample.colourHint': 'The colours of the figure are detected when it is opened. Pick them again with L and B if it is wrong.',
       'sample.aiWorking': 'The model is looking at the figure.',
       'sample.aiNoCurves': 'No curve could be read from the figure.',
       'sample.aiDone': 'Added {n} series from the model.',
@@ -271,8 +275,8 @@
       'app.openSubtitle': '指向图表、曲线或地图，把曲线变成可用的数据表。',
       'qs.scaleTitle': '设定标定',
       'qs.scaleBody': '点击四个轴端点，再填入真实数值。',
-      'qs.pickTitle': '指定曲线颜色',
-      'qs.pickBody': '曲线上点一下，背景上点一下。',
+      'qs.pickTitle': '曲线颜色',
+      'qs.pickBody': '打开图时会自动识别，若不对就自己点一下。',
       'qs.digitizeTitle': '开始取点',
       'qs.digitizeBody': '实线用自动追踪，任意形状用区域取点。',
 
@@ -337,6 +341,8 @@
       'panel.area': '区域采样',
       'panel.export': '导出',
       'panel.series': '数据系列',
+      'panel.curves': '曲线',
+      'panel.tabHint': '这里显示当前工具对应的面板。',
 
       'calib.point': '标定点',
       'calib.pixel': '像素',
@@ -413,6 +419,7 @@
       'status.selected': '已选 {n} 个',
 
       'msg.imageLoaded': '已载入 {name}（{w}×{h}）',
+      'msg.autoColours': '已自动识别曲线色与背景色',
       'msg.tiffUnsupported': '此版本无法读取 TIFF 文件，请先转换成 PNG 或 JPG。',
       'msg.noImage': '请先打开图片。',
       'msg.calibNeeded': '请先完成坐标标定。',
@@ -504,6 +511,7 @@
       'cloud.noKey': '尚未设置 AI 密钥，请在设置里添加。',
       'cloud.noAi': '当前构建没有 AI 通道。',
       'sample.aiHint': '让模型读出图中的曲线，作为一个新系列加入。',
+      'sample.colourHint': '打开图时会自动识别曲线色与背景色。若不对，用 L / B 重新采样。',
       'sample.aiWorking': '模型正在看图。',
       'sample.aiNoCurves': '没有从图中读出任何曲线。',
       'sample.aiDone': '已从模型加入 {n} 个系列。',

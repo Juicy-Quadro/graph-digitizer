@@ -29,6 +29,9 @@
     zoomLabel: document.getElementById('zoom-label'),
     toolrail: document.getElementById('toolrail'),
     inspector: document.getElementById('inspector'),
+    inspectorTabs: Array.from(document.querySelectorAll('.itab')),
+    inspectorPages: Array.from(document.querySelectorAll('.inspector-page')),
+    toolPanels: Array.from(document.querySelectorAll('[data-tool-panel]')),
     drawer: document.getElementById('drawer'),
     tableWrap: document.getElementById('table-wrap'),
     dataBody: document.getElementById('data-body'),
@@ -630,12 +633,60 @@
     el.statusTool.textContent = t('tool.' + tool);
     el.stageHint.textContent = t('tool.' + tool + '.hint');
     canvasView.emit('view', view.getView());
+    syncToolPanels();
     if (tool !== 'trace') tracePending = null;
     if (tool !== 'scale') {
       calibPending = null;
       canvasView.setCalibMode(null);
       renderCalibPanel();
     }
+  }
+
+  // ------------------------------------------------------------------ inspector
+
+  /*
+   * The inspector has three pages: the curve settings, the contour map and
+   * the export. Only one of them is shown, because the settings of the thing
+   * that is being worked on are the ones that should be in sight, and the
+   * others are one click away instead of a scroll down through panels that
+   * are of no use right now.
+   */
+  let inspectorTab = 'curves';
+
+  function setInspectorTab(tab) {
+    inspectorTab = tab;
+    el.inspectorTabs.forEach((b) => {
+      const on = b.getAttribute('data-itab') === tab;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    el.inspectorPages.forEach((p) => {
+      p.hidden = p.getAttribute('data-page') !== tab;
+    });
+  }
+
+  /**
+   * The panel of the tool in use.
+   *
+   * The tracing and the area sampling have a panel each, and only the one
+   * that belongs to the tool in the hand is shown. It is also put in front,
+   * because the settings of the tool that is being used are the ones the
+   * user is looking for.
+   */
+  function syncToolPanels() {
+    const tool = store.state.ui.tool;
+    const page = el.inspectorPages.find((p) => p.getAttribute('data-page') === 'curves');
+    el.toolPanels.forEach((p) => {
+      const on = p.getAttribute('data-tool-panel') === tool;
+      p.hidden = !on;
+      if (on && page && page.firstChild !== p) page.insertBefore(p, page.firstChild);
+    });
+  }
+
+  function wireInspector() {
+    el.inspectorTabs.forEach((b) => {
+      b.addEventListener('click', () => setInspectorTab(b.getAttribute('data-itab')));
+    });
   }
 
   const CALIB_ORDER = ['xmin', 'xmax', 'ymin', 'ymax'];
@@ -950,10 +1001,17 @@
         el.emptyState.hidden = true;
         canvasView.setImage(image);
         canvasView.fit();
+        /*
+         * The colours of the figure are guessed right away, so that the
+         * figure can be traced without picking them by hand first. The mask
+         * is drawn over the figure, so the guess is visible right away, and
+         * the two colour tools pick them again if it is wrong.
+         */
+        applyAutoColours(false, false);
         recomputeMask();
         toast(t('msg.imageLoaded', {
           name: image.name, w: image.width, h: image.height
-        }), 'ok');
+        }) + ' · ' + t('msg.autoColours'), 'ok');
         resolve();
       };
       img.onerror = () => reject(new Error('decode failed'));
@@ -1533,9 +1591,12 @@
     const missing = anchors.filter((a) => !isFinite(a.value)).length;
     if (missing) {
       toast(t('cloud.aiPartial', { n: missing }), 'error');
-    } else {
-      toast(t('cloud.aiDone', { n: anchors.length }), 'ok');
+      return;
     }
+    // The ticks are there, so the field is taken out right away. There is
+    // nothing to wait for and the result is what the user wants to see.
+    toast(t('cloud.aiDone', { n: anchors.length }), 'ok');
+    extractCloudField();
   }
 
   /** The coordinates the grid is exported in. */
@@ -2050,14 +2111,25 @@
       toast(t('msg.noImage'), 'error');
       return;
     }
+    applyAutoColours(true);
+  }
+
+  /**
+   * Take the colours that the program guesses out of the figure.
+   *
+   * @param {boolean} tell     whether the user should be told about it
+   * @param {boolean} schedule  whether the mask is rebuilt afterwards
+   */
+  function applyAutoColours(tell, schedule) {
+    if (!image) return;
     const guess = Mask.autoDetectColors(image.imageData);
     el.lineColor.value = rgbToHex(guess.lineColor);
     el.lineColorHex.textContent = el.lineColor.value;
     el.bgColor.value = rgbToHex(guess.bgColor);
     el.bgColorHex.textContent = el.bgColor.value;
     store.setIn('sampling', { lineColor: guess.lineColor, bgColor: guess.bgColor });
-    scheduleMaskUpdate();
-    toast(t('action.autoDetect'), 'ok');
+    if (schedule !== false) scheduleMaskUpdate();
+    if (tell) toast(t('action.autoDetect'), 'ok');
   }
 
   function resetCalibration() {
@@ -2192,6 +2264,9 @@
     wireToolbar();
     wireKeyboard();
     wireDragAndDrop();
+    wireInspector();
+    setInspectorTab('curves');
+    syncToolPanels();
 
     canvasView.on('click', handleClick);
     canvasView.on('drag', handleDrag);

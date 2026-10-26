@@ -167,6 +167,17 @@
     <!-- inspector -->
     <aside class="inspector" id="inspector">
 
+      <div class="inspector-tabs" role="tablist">
+        <button class="itab active" data-itab="curves" role="tab" aria-selected="true"
+                data-i18n="panel.curves">Curves</button>
+        <button class="itab" data-itab="cloud" role="tab" aria-selected="false"
+                data-i18n="panel.cloud">Cloud Map</button>
+        <button class="itab" data-itab="export" role="tab" aria-selected="false"
+                data-i18n="panel.export">Export</button>
+      </div>
+
+      <div class="inspector-page" data-page="curves">
+
       <section class="panel" data-panel="calibration">
         <h3 class="panel-title">
           <span data-i18n="panel.calibration">Calibration</span>
@@ -272,6 +283,7 @@
             </div>
           </div>
           <button class="ghost wide" data-action="auto-detect" data-i18n="action.autoDetect">Auto Detect</button>
+          <p class="hint" data-i18n="sample.colourHint">The colours of the figure are detected when it is opened.</p>
           <button class="ghost wide" data-action="ai-extract-curves" data-i18n="action.aiExtract">Extract curves with AI</button>
           <p class="hint" data-i18n="sample.aiHint">The model reads the curves of the figure and returns them as a new series.</p>
           <label class="check">
@@ -285,7 +297,7 @@
         </div>
       </section>
 
-      <section class="panel" data-panel="trace">
+      <section class="panel" data-panel="trace" data-tool-panel="trace">
         <h3 class="panel-title"><span data-i18n="panel.trace">Auto Trace</span></h3>
         <div class="panel-body">
           <label class="field">
@@ -318,7 +330,7 @@
         </div>
       </section>
 
-      <section class="panel" data-panel="area">
+      <section class="panel" data-panel="area" data-tool-panel="area">
         <h3 class="panel-title"><span data-i18n="panel.area">Area Sampling</span></h3>
         <div class="panel-body">
           <label class="field">
@@ -358,6 +370,10 @@
           <button class="ghost wide" data-action="clear-region" data-i18n="area.clearRegion">Clear region</button>
         </div>
       </section>
+
+      </div><!-- /inspector-page curves -->
+
+      <div class="inspector-page" data-page="cloud" hidden>
 
       <section class="panel" data-panel="cloud">
         <h3 class="panel-title">
@@ -442,6 +458,10 @@
         </div>
       </section>
 
+      </div><!-- /inspector-page cloud -->
+
+      <div class="inspector-page" data-page="export" hidden>
+
       <section class="panel" data-panel="export">
         <h3 class="panel-title"><span data-i18n="panel.export">Export</span></h3>
         <div class="panel-body">
@@ -479,6 +499,8 @@
           <p class="hint" data-i18n="export.hint">Export the current series as a data table.</p>
         </div>
       </section>
+
+      </div><!-- /inspector-page export -->
     </aside>
   </div>
 
@@ -487,6 +509,8 @@
     <header class="drawer-head">
       <div class="series-tabs" id="series-tabs"></div>
       <div class="drawer-actions">
+        <button class="ghost small" data-action="export" data-i18n="action.export">Export</button>
+        <button class="ghost small" data-action="copy" data-i18n="action.copy">Copy</button>
         <button class="ghost small" data-action="add-series" data-i18n="series.add">Add series</button>
         <button class="ghost small" data-action="clear-points" data-i18n="action.clear">Clear</button>
         <button class="ghost small" data-action="toggle-drawer" title="Collapse">

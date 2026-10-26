@@ -399,6 +399,42 @@ html[data-theme="light"] .stage {
   padding-bottom: 28px;
 }
 
+/* The three pages of the inspector. Only one of them is shown, so that the
+   settings of the thing that is being worked on are the ones in sight. */
+.inspector-tabs {
+  display: flex;
+  gap: 3px;
+  padding: 9px 11px 0;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+}
+.itab {
+  appearance: none;
+  border: 1px solid transparent;
+  border-bottom: none;
+  background: transparent;
+  color: var(--text-faint);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: .04em;
+  padding: 7px 12px 8px;
+  border-radius: var(--r-sm) var(--r-sm) 0 0;
+  cursor: pointer;
+  transition: color var(--fast) var(--ease), background var(--fast) var(--ease);
+}
+.itab:hover { color: var(--text-dim); }
+.itab.active {
+  color: var(--text);
+  background: var(--bg-elev);
+  border-color: var(--border);
+}
+.inspector-page[hidden] { display: none; }
+.panel[data-tool-panel][hidden] { display: none; }
+
 .panel { border-bottom: 1px solid var(--border-soft); }
 .panel:last-child { border-bottom: none; }
 
