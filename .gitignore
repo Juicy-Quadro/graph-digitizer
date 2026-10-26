@@ -25,3 +25,10 @@ tools/_scratch/
 
 # Local credential file (never commit)
 .github-token.txt
+llm-key.txt
+llm-key.bin
+*.key
+*-key.txt
+*-token.txt
+.env
+.env.*
