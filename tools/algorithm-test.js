@@ -752,6 +752,29 @@ section('8. Colour bar calibration and field extraction');
   const keepSize = ColorBar.modelSize(2000, 300, 1400);
   check('a large crop is not scaled down',
     keepSize.scale === 1 && keepSize.width === 2000, JSON.stringify(keepSize));
+
+  // The tick labels are found by the program, so the model only has to read
+  // the numbers.
+  const tickImage = makeImage(200, 300, (data) => {
+    for (let y = 20; y < 280; y++) {
+      for (let x = 160; x < 170; x++) px(data, 200, x, y, 20, 20, 220);
+    }
+    // Two labels, one at y = 50 and one at y = 240.
+    for (const y0 of [44, 234]) {
+      for (let y = y0; y < y0 + 10; y++) {
+        for (let x = 178; x < 192; x++) px(data, 200, x, y, 0, 0, 0);
+      }
+    }
+  });
+  const tickBar = { x: 160, y: 20, w: 10, h: 260 };
+  const labels = ColorBar.findTickLabels(tickImage, tickBar);
+  check('the tick labels are found', labels.length === 2, labels.length + ' labels');
+  check('the first label is near the top of the bar',
+    labels.length === 2 && Math.abs(labels[0].t - (1 - (48 - 20) / 260)) < 0.02,
+    labels.length ? String(labels[0].t) : '');
+  check('the second label is near the bottom of the bar',
+    labels.length === 2 && Math.abs(labels[1].t - (1 - (238 - 20) / 260)) < 0.02,
+    labels.length ? String(labels[1].t) : '');
 }
 
 // ---------------------------------------------------------------- summary

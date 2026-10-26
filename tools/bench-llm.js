@@ -272,13 +272,13 @@ app.whenReady().then(async () => {
         const sctx = source.getContext('2d', { willReadFrequently: true });
         sctx.drawImage(img, 0, 0);
         const imageData = sctx.getImageData(0, 0, source.width, source.height);
-        const window = CB.labelWindow(imageData, ${JSON.stringify(entry.bar)}, { margin: 10 });
+        const crop = CB.labelWindow(imageData, ${JSON.stringify(entry.bar)}, { margin: 10 });
         const turned = document.createElement('canvas');
-        turned.width = Math.max(1, Math.round(window.w));
-        turned.height = Math.max(1, Math.round(window.h));
+        turned.width = Math.max(1, Math.round(crop.w));
+        turned.height = Math.max(1, Math.round(crop.h));
         const tctx = turned.getContext('2d');
         tctx.imageSmoothingQuality = 'high';
-        tctx.drawImage(source, window.x, window.y, window.w, window.h, 0, 0, turned.width, turned.height);
+        tctx.drawImage(source, crop.x, crop.y, crop.w, crop.h, 0, 0, turned.width, turned.height);
         const size = CB.modelSize(turned.width, turned.height, 1400);
         const final = document.createElement('canvas');
         final.width = size.width;
@@ -290,8 +290,8 @@ app.whenReady().then(async () => {
           dataURL: final.toDataURL('image/png'),
           width: final.width,
           height: final.height,
-          offsetX: window.x,
-          offsetY: window.y
+          offsetX: crop.x,
+          offsetY: crop.y
         };
       })()`);
       const started = Date.now();
@@ -350,6 +350,15 @@ app.whenReady().then(async () => {
             t: Math.round(p.t * 1000) / 1000,
             value: p.value
           }));
+          // The way the application uses the answer: the program supplies
+          // the positions and the model only the numbers.
+          const printed = (entry.labels || [])
+            .filter((l) => l.t >= -0.05 && l.t <= 1.05)
+            .sort((a, b) => a.y - b.y);
+          if (printed.length === pairs.length) {
+            const matched = pairs.map((p, i) => ({ t: printed[i].t, value: p.value }));
+            record.bar.residualPrinted = affineResidual(matched);
+          }
         }
       }
     }

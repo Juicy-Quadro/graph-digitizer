@@ -1404,14 +1404,14 @@
    * tall.
    */
   function cropColorBar(rect, orientation) {
-    const window = GD.ColorBar.labelWindow(image.imageData, rect, { margin: 10 });
+    const crop = GD.ColorBar.labelWindow(image.imageData, rect, { margin: 10 });
     const source = image.canvas;
     const turned = document.createElement('canvas');
-    turned.width = Math.max(1, Math.round(window.w));
-    turned.height = Math.max(1, Math.round(window.h));
+    turned.width = Math.max(1, Math.round(crop.w));
+    turned.height = Math.max(1, Math.round(crop.h));
     const tctx = turned.getContext('2d');
     tctx.imageSmoothingQuality = 'high';
-    tctx.drawImage(source, window.x, window.y, window.w, window.h, 0, 0, turned.width, turned.height);
+    tctx.drawImage(source, crop.x, crop.y, crop.w, crop.h, 0, 0, turned.width, turned.height);
 
     const size = GD.ColorBar.modelSize(turned.width, turned.height, 1400);
     const final = document.createElement('canvas');
@@ -1425,8 +1425,8 @@
       dataURL: final.toDataURL('image/png'),
       width: final.width,
       height: final.height,
-      offsetX: window.x,
-      offsetY: window.y,
+      offsetX: crop.x,
+      offsetY: crop.y,
       orientation: orientation
     };
   }
@@ -1484,18 +1484,37 @@
       return;
     }
     const anchors = [];
-    for (const tick of ticks) {
-      if (!isFinite(tick.position)) continue;
-      const original = g.orientation === 'horizontal'
-        ? crop.offsetX + tick.position
-        : crop.offsetY + tick.position;
-      const t = g.orientation === 'horizontal'
-        ? (original - g.bar.x) / g.bar.w
-        : 1 - (original - g.bar.y) / g.bar.h;
+    /*
+     * The program knows where the printed labels are, the model knows what
+     * they say. A model reads a number well but places it badly, so the
+     * positions of the labels are used and only the numbers are taken from
+     * the answer. When the two do not line up, the answer keeps its own
+     * positions.
+     */
+    const printed = GD.ColorBar.findTickLabels(image.imageData, g.bar)
+      .filter((l) => l.t >= -0.05 && l.t <= 1.05)
+      .sort((a, b) => a.y - b.y);
+    const usePrinted = printed.length === ticks.length;
+    for (let i = 0; i < ticks.length; i++) {
+      const tick = ticks[i];
+      if (!isFinite(tick.value)) continue;
+      let t;
+      if (usePrinted) {
+        t = printed[i].t;
+      } else if (isFinite(tick.position)) {
+        const original = g.orientation === 'horizontal'
+          ? crop.offsetX + tick.position
+          : crop.offsetY + tick.position;
+        t = g.orientation === 'horizontal'
+          ? (original - g.bar.x) / g.bar.w
+          : 1 - (original - g.bar.y) / g.bar.h;
+      } else {
+        continue;
+      }
       if (!isFinite(t)) continue;
       anchors.push({
         t: Math.max(0, Math.min(1, t)),
-        value: isFinite(tick.value) ? tick.value : null,
+        value: tick.value,
         label: tick.label || ''
       });
     }

@@ -299,11 +299,11 @@ X = interp(xminValue, xmaxValue, u)   （对数轴时在 log 空间插值）
 
 ## 精度验证 · Validation
 
-五套可执行回归，覆盖算法、主题、交互体验、安全策略与指针手势：
+八套可执行回归，覆盖算法、模型解析、跨层一致性、主题、交互体验、安全策略、指针手势与真实论文图：
 
 | 脚本 | 命令 | 内容 |
 |---|---|---|
-| `tools/algorithm-test.js` | `node tools/algorithm-test.js` | 标定 / 掩膜 / 追踪 / 区域取点 / 导出器 / 色标，**83 项断言** |
+| `tools/algorithm-test.js` | `node tools/algorithm-test.js` | 标定 / 掩膜 / 追踪 / 区域取点 / 导出器 / 色标，**88 项断言** |
 | `tools/llm-test.js` | `node tools/llm-test.js` | 模型提示词与回复解析（离线，不联网），**34 项** |
 | `tools/cross-check.js` | `node tools/cross-check.js` | i18n 键、DOM id、IPC 通道、脚本引用的一致性 |
 | `tools/theme-test.js` | `electron tools/theme-test.js` | 跟随系统 / 固定主题 / 工具栏切换，**7 项** |
@@ -313,6 +313,19 @@ X = interp(xminValue, xmaxValue, u)   （对数轴时在 log 空间插值）
 | `tools/paper-test.js` | `electron tools/paper-test.js` | **真实 arXiv 论文图**上的色标提取与数值场还原，**20 项** |
 
 论文图夹具来自 arXiv 论文 2601.00342 的源码包，`python tools/fetch_paper_figures.py` 可随时重建。实测颜色读数误差 **0.73%–1.72%（量程百分比）**，覆盖 jet 与发散色标、标签只标中段等真实情况。
+
+### 模型能力评测 · Benchmark
+
+除了回归，还有一套**几百张真实论文图**上的能力评测，用来回答「模型在真实图上到底比经典算法强多少、弱多少」。
+
+```bash
+python tools/bench_fetch.py --count 400 --papers 140   # 取图
+electron tools/bench-reference.js                      # 经典基准线
+electron tools/bench-llm.js --task bar                # 评测（可中断续跑）
+node tools/bench-report.js                            # 汇总
+```
+
+已经查出来的结论见 [`docs/BENCHMARK.md`](docs/BENCHMARK.md)，其中两条直接改了产品：
 
 验证数据来自 GetData Graph Digitizer 2.26 自带的样例图与 `.gdw` 工作区 —— 工作区里保存了原程序自己提取的真值坐标。
 

@@ -170,13 +170,22 @@ function main() {
       const rel = withRes.map((r) => r.bar.residual.relative).filter((v) => v !== null);
       const s = stats(rel);
       say('* the read numbers against a straight line (a number read wrong shows up here):');
-      say('  * median ' + fmt(s.median * 100, 2) + ' percent of the range, p90 ' +
-        fmt(s.p90 * 100, 2) + ' percent, worst ' + fmt(s.worst * 100, 2) + ' percent');
+      say('  * with the positions of the model: median ' + fmt(s.median * 100, 2) +
+        ' percent of the range, p90 ' + fmt(s.p90 * 100, 2) +
+        ' percent, worst ' + fmt(s.worst * 100, 2) + ' percent');
       const clean = withRes.filter((r) => r.bar.residual.relative !== null &&
         r.bar.residual.relative < 0.02).length;
       say('  * answers that sit on a straight line within two percent: **' +
         clean + ' of ' + withRes.length + '** (' +
         (100 * clean / withRes.length).toFixed(1) + ' percent)');
+    }
+    const printed = withRes.filter((r) => r.bar.residualPrinted);
+    if (printed.length) {
+      const rel = printed.map((r) => r.bar.residualPrinted.relative).filter((v) => v !== null);
+      const s = stats(rel);
+      say('* the same numbers on the positions the program found: median ' +
+        fmt(s.median * 100, 2) + ' percent of the range, p90 ' +
+        fmt(s.p90 * 100, 2) + ' percent, worst ' + fmt(s.worst * 100, 2) + ' percent');
     }
     const latencies = barRecords.map((r) => r.bar.ms);
     if (latencies.length) {

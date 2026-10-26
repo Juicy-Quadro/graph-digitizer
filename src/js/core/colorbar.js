@@ -524,6 +524,69 @@
     };
   }
 
+  /**
+   * The tick labels next to a colour bar.
+   *
+   * They are blocks of dark text, and their middle is the position of the
+   * tick. The program finds them, so the model only has to read the numbers:
+   * a model is good at reading a number and bad at saying where it is.
+   *
+   * @param {ImageData} imageData
+   * @param {object} bar
+   * @returns {Array} [{ y, height, t }] with t from 0 at the low end of the bar
+   */
+  function findTickLabels(imageData, bar) {
+    if (!bar) return [];
+    const w = imageData.width;
+    const h = imageData.height;
+    const data = imageData.data;
+    const x0 = bar.x + bar.w + 18;
+    const x1 = Math.min(w, x0 + 170);
+    const y0 = Math.max(0, bar.y - 40);
+    const y1 = Math.min(h, bar.y + bar.h + 40);
+    if (x1 <= x0 || y1 <= y0) return [];
+
+    const dark = [];
+    for (let y = y0; y < y1; y++) {
+      let n = 0;
+      for (let x = x0; x < x1; x++) {
+        const p = (y * w + x) * 4;
+        if (0.299 * data[p] + 0.587 * data[p + 1] + 0.114 * data[p + 2] < 120) n++;
+      }
+      dark.push(n);
+    }
+    // The blocks of rows that carry text.
+    const blocks = [];
+    let start = -1;
+    for (let i = 0; i <= dark.length; i++) {
+      const on = i < dark.length && dark[i] >= 2;
+      if (on && start < 0) start = i;
+      else if (!on && start >= 0) {
+        blocks.push([start, i]);
+        start = -1;
+      }
+    }
+    // A number with a sign or a comma is more than one block.
+    const merged = [];
+    for (const b of blocks) {
+      if (merged.length && b[0] - merged[merged.length - 1][1] <= 6) {
+        merged[merged.length - 1][1] = b[1];
+      } else {
+        merged.push([b[0], b[1]]);
+      }
+    }
+    return merged
+      .filter((b) => b[1] - b[0] >= 8)
+      .map((b) => {
+        const y = y0 + Math.round((b[0] + b[1]) / 2);
+        return {
+          y: y,
+          height: b[1] - b[0],
+          t: 1 - (y - bar.y) / bar.h
+        };
+      });
+  }
+
   GD.ColorBar = {
     scanBar,
     buildMap,
@@ -531,6 +594,7 @@
     valueAt,
     labelExtent,
     labelWindow,
-    modelSize
+    modelSize,
+    findTickLabels
   };
 })(typeof window !== 'undefined' ? window : globalThis);
