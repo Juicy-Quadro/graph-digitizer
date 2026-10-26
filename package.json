@@ -13,6 +13,10 @@
     "start": "electron .",
     "dev": "electron . --remote-debugging-port=9333",
     "test": "node tools/run-tests.js",
+    "bench:fetch": "python tools/bench_fetch.py --count 400 --papers 140",
+    "bench:reference": "electron tools/bench-reference.js",
+    "bench:llm": "electron tools/bench-llm.js",
+    "bench:report": "node tools/bench-report.js",
     "pack": "electron-builder --win --x64 --dir",
     "dist": "electron-builder --win --x64"
   },
