@@ -39,6 +39,22 @@ $notes = @'
 Digitise data points out of graphs and plots in images, and the colours of a
 contour map into numbers.
 
+### What is new in 1.5.3
+
+**Cut a figure out of the screen.**
+
+A figure of a paper is often still on the screen, in a reader or in a browser. The
+application can now take a picture of the screen itself, cut the figure out of it with
+a drag and open it like any other image.
+
+- The button `截屏` in the toolbar, or `文件 → 截取屏幕` in the native menu.
+- **The window steps out of the way** before the picture is taken, so the figure of the
+  paper is not covered by it.
+- **Drag over the figure** to mark the part that is wanted. Without a drag the whole
+  screen is taken.
+- What is cut out is a normal image: it can be scaled, traced and exported like any
+  other.
+
 ### What is new in 1.5.2
 
 **The interface follows the size of the window.**
