@@ -39,6 +39,24 @@ $notes = @'
 Digitise data points out of graphs and plots in images, and the colours of a
 contour map into numbers.
 
+### What is new in 1.5.2
+
+**The interface follows the size of the window.**
+
+- **The figure follows the window.** While it sits in the window as a whole it is fitted
+  again on every change of the size, and once it has been zoomed in it keeps its place
+  in the middle of the window instead of being cut off.
+- **The data table no longer squeezes the figure out.** It takes a part of the window
+  now, and never more than a third of it.
+- **The eight tools of the rail fit in a short window** without a scroll, and the marker
+  of the tool in use is no longer cut off by the edge of the rail.
+- **The headings of the panels are no longer covered by the tabs.** They stick under
+  them.
+
+A new regression suite, tools/layout-test.js, opens the interface in five sizes and
+measures every control: none may hang over the edge, none may be covered and none may
+lie on another.
+
 ### What is new in 1.5.1
 
 **One door for the settings, and nothing twice.**
