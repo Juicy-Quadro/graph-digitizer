@@ -39,6 +39,26 @@ $notes = @'
 Digitise data points out of graphs and plots in images, and the colours of a
 contour map into numbers.
 
+### What is new in 1.5.4
+
+**Three things borrowed from WebPlotDigitizer.**
+
+- **The figure can be pasted from the clipboard.** A figure of a paper is usually
+  copied out of a reader or a PDF, so `Ctrl+V` puts it straight into the
+  application.
+- **The calibration points can be moved.** The four points are the base of every
+  number, and a point that was clicked one pixel off costs a whole figure. A
+  point that is already there can now be picked and moved with the arrow keys
+  (Shift moves ten pixels at a time) or with the mouse.
+- **The marks of a scatter plot become points.** A scatter plot is a field of
+  separate marks, and every mark is one point of the figure. The centre of every
+  piece is found and becomes a row of the data table.
+
+The parts of WebPlotDigitizer that were left out are the ones that need a
+different model of the calibration (bar charts, polar and ternary plots) and the
+tools that are of little use for the figures of papers (removing the grid,
+template matching, measuring).
+
 ### What is new in 1.5.3
 
 **Cut a figure out of the screen.**
@@ -320,7 +340,7 @@ below 1e-13 px.
 
 ### Regression suites
 
-Eight executable suites, 201 assertions in total:
+Nine executable suites, 201 assertions in total:
 
     node tools/run-tests.js
 
