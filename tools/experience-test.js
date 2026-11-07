@@ -132,6 +132,33 @@ app.whenReady().then(async () => {
     colours.kept && colours.kept[0] === 12 && colours.kept[1] === 34 && colours.kept[2] === 56,
     JSON.stringify(colours.kept));
 
+  // --- 7. the settings hold everything, and they work --------------------
+  const settings = await run(`(async () => {
+    const g = window.__gd;
+    document.querySelector('[data-action="settings"]').click();
+    await new Promise((r) => setTimeout(r, 200));
+    const groups = document.querySelectorAll('#modal-body .settings-group').length;
+    const headings = Array.from(document.querySelectorAll('#modal-body .settings-heading'))
+      .map((h) => h.textContent);
+    // Switch the language from the settings and see whether it takes.
+    const radio = document.querySelector('input[name="set-lang"][value="en"]');
+    radio.checked = true;
+    radio.dispatchEvent(new Event('change', { bubbles: true }));
+    await new Promise((r) => setTimeout(r, 200));
+    const title = document.getElementById('modal-title').textContent;
+    const ui = document.querySelector('[data-i18n="action.openImage"]').textContent;
+    document.querySelector('[data-action="modal-close"]').click();
+    return { groups, headings, title, ui, language: g.store.state.ui.language };
+  })()`);
+  check('the settings are in one place', settings.groups === 3,
+    settings.groups + ' groups');
+  check('the settings have a heading of their own',
+    settings.headings.length === 3 && settings.headings.every((h) => h.length > 0),
+    JSON.stringify(settings.headings));
+  check('the language can be changed in the settings',
+    settings.language === 'en' && settings.ui === 'Open Image',
+    settings.language + ' / ' + settings.ui);
+
   console.log('\n' + (failures ? failures + ' check(s) FAILED' : 'all experience checks passed'));
   app.exit(failures ? 1 : 0);
 });

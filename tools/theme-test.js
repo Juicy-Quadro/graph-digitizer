@@ -63,8 +63,7 @@ app.whenReady().then(async () => {
   const read = () => win.webContents.executeJavaScript(`({
     preference: window.__gd.store.state.ui.theme,
     applied: document.documentElement.getAttribute('data-theme'),
-    systemDark: window.matchMedia('(prefers-color-scheme: dark)').matches,
-    buttonMode: document.querySelector('[data-action="toggle-theme"]').getAttribute('data-theme-mode')
+    systemDark: window.matchMedia('(prefers-color-scheme: dark)').matches
   })`);
 
   let s = await waitFor('the dark theme', async () => {
@@ -103,19 +102,36 @@ app.whenReady().then(async () => {
   console.log('  pinned=dark, system=light -> ' + JSON.stringify(s));
   check('a pinned theme ignores the system', s.applied === 'dark', s.applied);
 
-  // Cycle the toolbar button.
-  const cycle = [];
-  for (let i = 0; i < 3; i++) {
-    await win.webContents.executeJavaScript(
-      `document.querySelector('[data-action="toggle-theme"]').click(); 'ok'`);
-    await new Promise((r) => setTimeout(r, 250));
-    const st = await read();
-    cycle.push(st.preference + '=' + st.applied + '/' + st.buttonMode);
-  }
-  console.log('  cycle: ' + cycle.join('  '));
-  check('the toolbar button cycles auto -> light -> dark',
-    cycle.join(' | ').indexOf('auto=') === 0 && cycle[1].indexOf('light=') === 0 &&
-    cycle[2].indexOf('dark=') === 0, cycle.join(' | '));
+  // The theme is changed in the settings, which is the one place where all
+  // the settings live.
+  await win.webContents.executeJavaScript(
+    `document.querySelector('[data-action="settings"]').click(); 'ok'`);
+  await new Promise((r) => setTimeout(r, 400));
+  const dialog = await win.webContents.executeJavaScript(`({
+    open: !document.getElementById('modal-backdrop').hidden,
+    groups: document.querySelectorAll('#modal-body .settings-group').length,
+    hasLanguage: !!document.querySelector('input[name="set-lang"]'),
+    hasTheme: !!document.querySelector('input[name="set-theme"]'),
+    hasKey: !!document.getElementById('llm-key')
+  })`);
+  check('the settings hold every setting of the application',
+    dialog.open && dialog.groups === 3 && dialog.hasLanguage &&
+    dialog.hasTheme && dialog.hasKey, JSON.stringify(dialog));
+
+  await win.webContents.executeJavaScript(`(() => {
+    const radio = document.querySelector('input[name="set-theme"][value="light"]');
+    radio.checked = true;
+    radio.dispatchEvent(new Event('change', { bubbles: true }));
+    return 'ok';
+  })()`);
+  await new Promise((r) => setTimeout(r, 300));
+  s = await read();
+  console.log('  from the settings -> ' + JSON.stringify(s));
+  check('the theme can be changed in the settings',
+    s.preference === 'light' && s.applied === 'light', s.preference + '/' + s.applied);
+
+  await win.webContents.executeJavaScript(
+    `document.querySelector('[data-action="modal-close"]').click(); 'ok'`);
   console.log('\n' + (failures ? failures + ' check(s) FAILED' : 'all theme checks passed'));
   app.exit(failures ? 1 : 0);
 });

@@ -65,7 +65,6 @@ const testHookEnabled = process.env.GD_TEST_HOOK === '1';
 
 let mainWindow = null;
 let currentLanguage = 'en';
-let currentTheme = 'auto';
 
 /**
  * Folders the user has explicitly opened through a native dialog. Only files
@@ -284,9 +283,8 @@ function send(action, payload) {
   }
 }
 
-function buildMenu(language, theme) {
+function buildMenu(language) {
   const lang = language === 'zh' ? 'zh' : 'en';
-  const th = theme || currentTheme;
   const template = [
     {
       label: lang === 'zh' ? '文件(&F)' : 'File(&F)',
@@ -330,47 +328,6 @@ function buildMenu(language, theme) {
         },
         { type: 'separator' },
         {
-          label: lang === 'zh' ? '语言(&L)' : 'Language(&L)',
-          submenu: [
-            {
-              label: 'English',
-              type: 'radio',
-              checked: lang === 'en',
-              click: () => send('language', 'en')
-            },
-            {
-              label: '简体中文',
-              type: 'radio',
-              checked: lang === 'zh',
-              click: () => send('language', 'zh')
-            }
-          ]
-        },
-        {
-          label: lang === 'zh' ? '主题(&T)' : 'Theme(&T)',
-          submenu: [
-            {
-              label: lang === 'zh' ? '跟随系统' : 'Follow system',
-              type: 'radio',
-              checked: th === 'auto',
-              click: () => send('theme', 'auto')
-            },
-            {
-              label: lang === 'zh' ? '深色' : 'Dark',
-              type: 'radio',
-              checked: th === 'dark',
-              click: () => send('theme', 'dark')
-            },
-            {
-              label: lang === 'zh' ? '浅色' : 'Light',
-              type: 'radio',
-              checked: th === 'light',
-              click: () => send('theme', 'light')
-            }
-          ]
-        },
-        { type: 'separator' },
-        {
           label: lang === 'zh' ? '设置(&S)…' : 'Settings(&S)…',
           accelerator: 'CmdOrCtrl+,',
           click: () => send('settings')
@@ -394,11 +351,6 @@ ipcMain.on('menu:language', (_evt, language) => {
   scheduleMenuRebuild();
 });
 
-ipcMain.on('menu:theme', (_evt, theme) => {
-  currentTheme = ['auto', 'dark', 'light'].indexOf(theme) >= 0 ? theme : 'auto';
-  scheduleMenuRebuild();
-});
-
 /**
  * A language change and a theme change usually arrive together, and each
  * rebuild replaces the whole menu. Coalesce them into one rebuild so the
@@ -410,7 +362,7 @@ function scheduleMenuRebuild() {
   if (menuRebuildTimer) clearTimeout(menuRebuildTimer);
   menuRebuildTimer = setTimeout(() => {
     menuRebuildTimer = null;
-    buildMenu(currentLanguage, currentTheme);
+    buildMenu(currentLanguage);
   }, 40);
 }
 
@@ -453,7 +405,7 @@ setInterval(() => pushSystemTheme(false), 1000).unref();
 
 app.whenReady().then(() => {
   registerAppProtocol();
-  buildMenu(currentLanguage, currentTheme);
+  buildMenu(currentLanguage);
   createWindow();
 
   app.on('activate', () => {

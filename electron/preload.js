@@ -38,9 +38,6 @@ contextBridge.exposeInMainWorld('gd', {
   /** Keep the native title bar overlay in sync with the application theme. */
   setTitleBarColor: (background, symbol) => ipcRenderer.send('titlebar:color', background, symbol),
 
-  /** Keep the native menu radio state in sync with the application theme. */
-  setMenuTheme: (theme) => ipcRenderer.send('menu:theme', theme),
-
   /** The operating system colour scheme changed. */
   onSystemTheme: (handler) => {
     const listener = (_evt, theme) => handler(theme);

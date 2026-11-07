@@ -47,7 +47,6 @@
     statusLogical: document.getElementById('status-logical'),
     statusCount: document.getElementById('status-count'),
     calibState: document.getElementById('calib-state'),
-    langSwitch: document.getElementById('lang-switch'),
 
     // calibration
     calibRows: Array.from(document.querySelectorAll('[data-calib]')),
@@ -188,12 +187,16 @@
   /** Set by a modal that offers an explicit confirm action. */
   let modalConfirm = null;
 
+  /** What the open modal shows, so it can be rebuilt after a language change. */
+  let modalKind = 'info';
+
   function showModal(title, bodyHtml, onReady) {
     el.modalTitle.textContent = title;
     el.modalBody.innerHTML = bodyHtml;
     const actions = el.modalBackdrop.querySelector('.modal-actions');
     actions.innerHTML = '';
     modalConfirm = null;
+    modalKind = 'info';
 
     if (onReady) {
       const ok = document.createElement('button');
@@ -214,21 +217,33 @@
 
   function hideModal() {
     el.modalBackdrop.hidden = true;
+    modalKind = 'info';
   }
 
-  /** Settings dialog: language and theme, both applied immediately. */
+  /**
+   * The settings.
+   *
+   * Everything the user can change about the application itself is here:
+   * the language, the theme, the key of the model and the way the colours of
+   * a figure are found. Nothing else has a place of its own, so there is one
+   * door to all of it.
+   */
   function showSettings() {
     const lang = store.state.ui.language;
     const theme = store.state.ui.theme;
+    const auto = store.state.ui.autoColours !== false;
+    modalKind = 'settings';
     el.modalTitle.textContent = t('settings.title');
     el.modalBody.innerHTML =
-      '<div class="settings-block">' +
+      '<section class="settings-group">' +
+      '<h4 class="settings-heading" data-i18n="settings.appearance">' + escapeHtml(t('settings.appearance')) + '</h4>' +
+      '<div class="settings-item">' +
       '<div class="settings-label">' + escapeHtml(t('settings.language')) + '</div>' +
       '<div class="settings-row">' +
       '<label><input type="radio" name="set-lang" value="en"' + (lang === 'en' ? ' checked' : '') + '> English</label>' +
       '<label><input type="radio" name="set-lang" value="zh"' + (lang === 'zh' ? ' checked' : '') + '> 简体中文</label>' +
       '</div></div>' +
-      '<div class="settings-block">' +
+      '<div class="settings-item">' +
       '<div class="settings-label">' + escapeHtml(t('settings.theme')) + '</div>' +
       '<div class="settings-row">' +
       '<label><input type="radio" name="set-theme" value="auto"' + (theme === 'auto' ? ' checked' : '') + '> ' + escapeHtml(t('settings.theme.auto')) + '</label>' +
@@ -236,8 +251,18 @@
       '<label><input type="radio" name="set-theme" value="light"' + (theme === 'light' ? ' checked' : '') + '> ' + escapeHtml(t('settings.theme.light')) + '</label>' +
       '</div>' +
       '<p class="hint">' + escapeHtml(t('settings.themeHint')) + '</p>' +
-      '</div>' +
-      '<div class="settings-block">' +
+      '</div></section>' +
+      '<section class="settings-group">' +
+      '<h4 class="settings-heading" data-i18n="settings.behaviour">' + escapeHtml(t('settings.behaviour')) + '</h4>' +
+      '<label class="settings-check">' +
+      '<input type="checkbox" id="set-auto-colours"' + (auto ? ' checked' : '') + ' />' +
+      '<span>' + escapeHtml(t('settings.autoColours')) + '</span>' +
+      '</label>' +
+      '<p class="hint">' + escapeHtml(t('settings.autoColoursHint')) + '</p>' +
+      '</section>' +
+      '<section class="settings-group">' +
+      '<h4 class="settings-heading" data-i18n="settings.ai">' + escapeHtml(t('settings.ai')) + '</h4>' +
+      '<div class="settings-item">' +
       '<div class="settings-label">' + escapeHtml(t('settings.aiKey')) + '</div>' +
       '<div class="settings-row">' +
       '<input type="password" id="llm-key" class="grow" placeholder="sk-..." autocomplete="off" />' +
@@ -246,8 +271,8 @@
       '</div>' +
       '<p class="hint" id="llm-key-state"></p>' +
       '<p class="hint">' + escapeHtml(t('settings.aiKeyHint')) + '</p>' +
-      '</div>' +
-      '<p class="hint">' + escapeHtml(t('settings.applyNow')) + '</p>';
+      '</div></section>' +
+      '<p class="hint settings-foot">' + escapeHtml(t('settings.applyNow')) + '</p>';
 
     el.modalBody.querySelectorAll('input[name="set-lang"]').forEach((radio) => {
       radio.addEventListener('change', () => {
@@ -258,6 +283,10 @@
     el.modalBody.querySelectorAll('input[name="set-theme"]').forEach((radio) => {
       radio.addEventListener('change', () => setTheme(radio.value));
     });
+    const autoColours = el.modalBody.querySelector('#set-auto-colours');
+    if (autoColours) {
+      autoColours.addEventListener('change', () => setAutoColours(autoColours.checked));
+    }
 
     const keyInput = el.modalBody.querySelector('#llm-key');
     const keyState = el.modalBody.querySelector('#llm-key-state');
@@ -317,14 +346,14 @@
     I18n.setLanguage(lang);
     store.setUi({ language: lang });
     document.documentElement.setAttribute('data-theme', store.state.ui.theme);
-    el.langSwitch.querySelectorAll('button').forEach((b) => {
-      b.classList.toggle('active', b.getAttribute('data-lang') === lang);
-    });
     if (window.gd && window.gd.setMenuLanguage) window.gd.setMenuLanguage(lang);
     if (persist !== false) {
       try { localStorage.setItem('gd.language', lang); } catch (e) { void e; }
     }
     applyI18n();
+    // The settings are written out in the language of the moment, so they
+    // are written out again when the language changes.
+    if (!el.modalBackdrop.hidden && modalKind === 'settings') showSettings();
   }
 
   /** Chinese UI when the operating system is Chinese, English otherwise. */
@@ -354,19 +383,12 @@
     const pref = store.state.ui.theme;
     const actual = pref === 'auto' ? systemTheme() : pref;
     document.documentElement.setAttribute('data-theme', actual);
-
-    const btn = document.querySelector('[data-action="toggle-theme"]');
-    if (btn) {
-      btn.setAttribute('data-theme-mode', pref);
-      btn.title = t('settings.theme') + ': ' + t('settings.theme.' + pref);
-    }
     if (window.gd && window.gd.setTitleBarColor) {
       window.gd.setTitleBarColor(
         actual === 'dark' ? '#11151c' : '#f4f6fa',
         actual === 'dark' ? '#8b97a8' : '#62708a'
       );
     }
-    if (window.gd && window.gd.setMenuTheme) window.gd.setMenuTheme(pref);
     return actual;
   }
 
@@ -383,6 +405,27 @@
       if (THEME_CYCLE.indexOf(saved) >= 0) return saved;
     } catch (e) { void e; }
     return 'auto';
+  }
+
+  /**
+   * Whether the colours of a figure are found when it is opened.
+   *
+   * The guess is usually right, but a figure with several curves in the same
+   * colour is better off with the colours of the last time.
+   */
+  function setAutoColours(on) {
+    const value = !!on;
+    store.setUi({ autoColours: value });
+    try { localStorage.setItem('gd.autoColours', value ? '1' : '0'); } catch (e) { void e; }
+  }
+
+  function detectAutoColours() {
+    try {
+      const saved = localStorage.getItem('gd.autoColours');
+      if (saved === '0') return false;
+      if (saved === '1') return true;
+    } catch (e) { void e; }
+    return true;
   }
 
   // ------------------------------------------------------------------ colour
@@ -1017,9 +1060,11 @@
          * the two colour tools pick them again if it is wrong. A workspace
          * brings its own colours and keeps them.
          */
-        if (!keepColours) applyAutoColours(false, false);
+        if (!keepColours && store.state.ui.autoColours !== false) {
+          applyAutoColours(false, false);
+        }
         recomputeMask();
-        if (keepColours) {
+        if (keepColours || store.state.ui.autoColours === false) {
           toast(t('msg.imageLoaded', {
             name: image.name, w: image.width, h: image.height
           }), 'ok');
@@ -1783,10 +1828,6 @@
       btn.addEventListener('click', () => setTool(btn.getAttribute('data-tool')));
     });
 
-    el.langSwitch.querySelectorAll('button').forEach((btn) => {
-      btn.addEventListener('click', () => setLanguage(btn.getAttribute('data-lang')));
-    });
-
     // Double click a series chip to rename it. The listener lives on the
     // stable container because the chips are re-rendered on every change.
     el.seriesTabs.addEventListener('dblclick', (evt) => {
@@ -1992,12 +2033,6 @@
         el.showMask.checked = next;
         store.setIn('sampling', { showMask: next });
         canvasView.setMaskOptions({ showMask: next });
-        break;
-      }
-      case 'toggle-theme': {
-        const current = store.state.ui.theme;
-        const next = THEME_CYCLE[(THEME_CYCLE.indexOf(current) + 1) % THEME_CYCLE.length];
-        setTheme(next);
         break;
       }
       case 'auto-detect': autoDetect(); break;
@@ -2327,7 +2362,7 @@
 
     setTool('select');
     setLanguage(detectLanguage(), false);
-    store.setUi({ theme: detectTheme() });
+    store.setUi({ theme: detectTheme(), autoColours: detectAutoColours() });
     applyTheme();
 
     // Follow the operating system theme for as long as the user has not

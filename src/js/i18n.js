@@ -184,6 +184,11 @@
       'msg.nothingToUndo': 'Nothing to undo.',
 
       'settings.title': 'Settings',
+      'settings.appearance': 'Appearance',
+      'settings.behaviour': 'Behaviour',
+      'settings.ai': 'AI',
+      'settings.autoColours': 'Find the colours of a figure when it is opened',
+      'settings.autoColoursHint': 'The curve colour and the background colour are guessed and shown as a mask over the figure. Turn this off to keep the colours of the last figure.',
       'settings.language': 'Language',
       'settings.language.en': 'English',
       'settings.language.zh': '简体中文',
@@ -443,6 +448,11 @@
       'msg.nothingToUndo': '没有可撤销的操作。',
 
       'settings.title': '设置',
+      'settings.appearance': '外观',
+      'settings.behaviour': '行为',
+      'settings.ai': '人工智能',
+      'settings.autoColours': '打开图时自动识别曲线色与背景色',
+      'settings.autoColoursHint': '程序会猜出曲线色和背景色，并以半透明掩膜画在图上。关掉它就会保留上一张图的颜色。',
       'settings.language': '语言',
       'settings.language.en': 'English',
       'settings.language.zh': '简体中文',

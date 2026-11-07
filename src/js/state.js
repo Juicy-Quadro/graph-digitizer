@@ -65,6 +65,7 @@
       tool: 'select',
       language: 'en',
       theme: 'auto',
+      autoColours: true,
       showMask: true
     },
     selection: []
