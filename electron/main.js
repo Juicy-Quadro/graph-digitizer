@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, Menu, dialog, ipcMain, clipboard, shell, nativeTheme, protocol } = require('electron');
+const { app, BrowserWindow, Menu, dialog, ipcMain, clipboard, shell, nativeTheme, protocol, desktopCapturer } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const llm = require('./llm');
@@ -260,6 +260,46 @@ ipcMain.handle('clipboard:write', (_evt, text) => {
   return true;
 });
 
+/**
+ * A picture of the screen.
+ *
+ * The window of the application steps out of the way first, so that the
+ * figure of the paper is not covered by it.
+ */
+ipcMain.handle('screen:capture', async () => {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return { ok: false, error: 'There is no window to take the picture from.' };
+  }
+  mainWindow.hide();
+  try {
+    // The window needs a moment to disappear from the picture.
+    await new Promise((r) => setTimeout(r, 260));
+    const sources = await desktopCapturer.getSources({
+      types: ['screen'],
+      thumbnailSize: { width: 4096, height: 4096 },
+      fetchWindowIcons: false
+    });
+    if (!sources.length) {
+      return { ok: false, error: 'The screen could not be read.' };
+    }
+    const shot = sources[0].thumbnail;
+    if (!shot || shot.isEmpty()) {
+      return { ok: false, error: 'The screen could not be read.' };
+    }
+    return {
+      ok: true,
+      dataURL: shot.toDataURL(),
+      width: shot.getSize().width,
+      height: shot.getSize().height
+    };
+  } catch (err) {
+    return { ok: false, error: String(err && err.message ? err.message : err) };
+  } finally {
+    mainWindow.show();
+    mainWindow.focus();
+  }
+});
+
 ipcMain.handle('app:info', () => ({
   version: app.getVersion(),
   electron: process.versions.electron,
@@ -290,6 +330,7 @@ function buildMenu(language) {
       label: lang === 'zh' ? '文件(&F)' : 'File(&F)',
       submenu: [
         { label: lang === 'zh' ? '打开图片(&O)…' : 'Open Image(&O)…', accelerator: 'CmdOrCtrl+O', click: () => send('open-image') },
+        { label: lang === 'zh' ? '截取屏幕(&C)…' : 'Capture from Screen(&C)…', click: () => send('capture-screen') },
         { label: lang === 'zh' ? '打开工作区(&W)…' : 'Open Workspace(&W)…', click: () => send('open-workspace') },
         { label: lang === 'zh' ? '保存工作区(&S)…' : 'Save Workspace(&S)…', accelerator: 'CmdOrCtrl+S', click: () => send('save-workspace') },
         { type: 'separator' },

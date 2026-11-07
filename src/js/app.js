@@ -39,6 +39,10 @@
     tableEmpty: document.getElementById('table-empty'),
     seriesTabs: document.getElementById('series-tabs'),
     toasts: document.getElementById('toasts'),
+
+    // screen capture
+    screenPicker: document.getElementById('screen-picker'),
+    screenPickerCanvas: document.getElementById('screen-picker-canvas'),
     modalBackdrop: document.getElementById('modal-backdrop'),
     modalTitle: document.getElementById('modal-title'),
     modalBody: document.getElementById('modal-body'),
@@ -956,6 +960,134 @@
     if (recordUndo !== false) store.pushUndo();
     store.setSeriesPoints(store.state.activeSeries, results);
     toast(t('msg.areaDone', { n: results.length }), 'ok');
+  }
+
+  // ------------------------------------------------------------------ screen
+
+  /**
+   * Take a picture of the screen and cut a figure out of it.
+   *
+   * The window of the application steps out of the way for the picture, so
+   * that the figure of the paper is not covered by it.
+   */
+  async function captureScreen() {
+    if (!window.gd || !window.gd.captureScreen) {
+      toast(t('screen.unavailable'), 'error');
+      return;
+    }
+    let shot = null;
+    try {
+      shot = await window.gd.captureScreen();
+    } catch (err) {
+      shot = { ok: false, error: String(err && err.message ? err.message : err) };
+    }
+    if (!shot || !shot.ok || !shot.dataURL) {
+      toast(shot && shot.error ? shot.error : t('screen.failed'), 'error');
+      return;
+    }
+    await openScreenPicker(shot);
+  }
+
+  /** The picture of the screen and the part of it that was picked. */
+  let screenShot = null;
+
+  async function openScreenPicker(shot) {
+    const canvas = el.screenPickerCanvas;
+    const image = new Image();
+    image.src = shot.dataURL;
+    try {
+      await image.decode();
+    } catch (err) {
+      void err;
+      toast(t('screen.failed'), 'error');
+      return;
+    }
+    const maxW = window.innerWidth - 110;
+    const maxH = window.innerHeight - 210;
+    const scale = Math.min(maxW / image.width, maxH / image.height, 1);
+    canvas.width = Math.max(1, Math.round(image.width * scale));
+    canvas.height = Math.max(1, Math.round(image.height * scale));
+    canvas.style.width = canvas.width + 'px';
+    canvas.style.height = canvas.height + 'px';
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+    screenShot = { image: image, scale: scale, rect: null, canvas: canvas, ctx: ctx };
+    el.screenPicker.hidden = false;
+    drawScreenSelection();
+  }
+
+  /** The picture with the part that is going to be taken marked. */
+  function drawScreenSelection() {
+    if (!screenShot) return;
+    const { canvas, ctx, image, rect } = screenShot;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+    if (!rect) return;
+    ctx.fillStyle = 'rgba(4, 7, 12, .58)';
+    ctx.fillRect(0, 0, canvas.width, rect.y);
+    ctx.fillRect(0, rect.y + rect.h, canvas.width, canvas.height - rect.y - rect.h);
+    ctx.fillRect(0, rect.y, rect.x, rect.h);
+    ctx.fillRect(rect.x + rect.w, rect.y, canvas.width - rect.x - rect.w, rect.h);
+    ctx.strokeStyle = 'var(--accent)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(rect.x + 1, rect.y + 1, Math.max(0, rect.w - 2), Math.max(0, rect.h - 2));
+  }
+
+  function closeScreenPicker() {
+    el.screenPicker.hidden = true;
+    screenShot = null;
+  }
+
+  /** Take the part of the screen that was marked and put it on the canvas. */
+  function takeScreenShot() {
+    if (!screenShot) return;
+    const { image, scale, rect } = screenShot;
+    const whole = { x: 0, y: 0, w: image.width * scale, h: image.height * scale };
+    const area = rect && rect.w > 4 && rect.h > 4 ? rect : whole;
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(area.w / scale));
+    canvas.height = Math.max(1, Math.round(area.h / scale));
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(
+      image,
+      area.x / scale, area.y / scale, canvas.width, canvas.height,
+      0, 0, canvas.width, canvas.height
+    );
+    const dataURL = canvas.toDataURL('image/png');
+    const size = { w: canvas.width, h: canvas.height };
+    closeScreenPicker();
+    loadImageFromDataURL(dataURL, 'screenshot.png', null);
+    void size;
+  }
+
+  /** Drag over the picture to mark the part that is going to be taken. */
+  function wireScreenPicker() {
+    const canvas = el.screenPickerCanvas;
+    let start = null;
+    canvas.addEventListener('pointerdown', (evt) => {
+      if (!screenShot) return;
+      const box = canvas.getBoundingClientRect();
+      start = { x: evt.clientX - box.left, y: evt.clientY - box.top };
+      screenShot.rect = { x: start.x, y: start.y, w: 0, h: 0 };
+      if (canvas.setPointerCapture) canvas.setPointerCapture(evt.pointerId);
+      drawScreenSelection();
+    });
+    canvas.addEventListener('pointermove', (evt) => {
+      if (!screenShot || !start) return;
+      const box = canvas.getBoundingClientRect();
+      const x = evt.clientX - box.left;
+      const y = evt.clientY - box.top;
+      screenShot.rect = {
+        x: Math.min(start.x, x),
+        y: Math.min(start.y, y),
+        w: Math.abs(x - start.x),
+        h: Math.abs(y - start.y)
+      };
+      drawScreenSelection();
+    });
+    const stop = () => { start = null; };
+    canvas.addEventListener('pointerup', stop);
+    canvas.addEventListener('pointercancel', stop);
   }
 
   // ------------------------------------------------------------------ image
@@ -2031,6 +2163,9 @@
   function handleAction(action) {
     switch (action) {
       case 'open-image': openImage(); break;
+      case 'capture-screen': captureScreen(); break;
+      case 'screen-take': takeScreenShot(); break;
+      case 'screen-cancel': closeScreenPicker(); break;
       case 'open-workspace': openWorkspace(); break;
       case 'save-workspace': saveWorkspace(); break;
       case 'export': exportData(); break;
@@ -2330,6 +2465,7 @@
     wireKeyboard();
     wireDragAndDrop();
     wireInspector();
+    wireScreenPicker();
     setInspectorTab('curves');
     syncToolPanels();
 
@@ -2343,6 +2479,7 @@
       window.gd.onMenuAction((payload) => {
         switch (payload.action) {
           case 'open-image': openImage(); break;
+          case 'capture-screen': captureScreen(); break;
           case 'open-workspace': openWorkspace(); break;
           case 'save-workspace': saveWorkspace(); break;
           case 'export': exportData(); break;
@@ -2426,6 +2563,7 @@
         setLlmExtractCurves(fn) {
           llmCurvesOverride = fn;
         },
+        openScreenPicker: (shot) => openScreenPicker(shot),
         recomputeMask,
         setSampling(patch) {
           store.setIn('sampling', patch);

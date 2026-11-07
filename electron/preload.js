@@ -25,6 +25,9 @@ contextBridge.exposeInMainWorld('gd', {
   llmReadColorBar: (payload) => ipcRenderer.invoke('llm:readColorBar', payload),
   llmExtractCurves: (payload) => ipcRenderer.invoke('llm:extractCurves', payload),
 
+  /** A picture of the screen, so that a figure can be cut out of it. */
+  captureScreen: () => ipcRenderer.invoke('screen:capture'),
+
   /** Menu commands are forwarded to the renderer. */
   onMenuAction: (handler) => {
     const listener = (_evt, payload) => handler(payload);

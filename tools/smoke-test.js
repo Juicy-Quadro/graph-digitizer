@@ -108,6 +108,19 @@ app.whenReady().then(async () => {
   check('no unexpected renderer errors were logged', unexpected.length === 0,
     unexpected.slice(0, 3).join(' | '));
 
+  // The screen must be readable, so that a figure can be cut out of it.
+  const capture = await win.webContents.executeJavaScript(`(async () => {
+    if (!window.gd || !window.gd.captureScreen) return { ok: false, error: 'no bridge' };
+    try {
+      const shot = await window.gd.captureScreen();
+      return { ok: !!shot.ok, width: shot.width, height: shot.height, len: shot.dataURL ? shot.dataURL.length : 0 };
+    } catch (err) {
+      return { ok: false, error: String(err && err.message ? err.message : err) };
+    }
+  })()`);
+  check('the screen can be captured', capture.ok === true && capture.len > 1000,
+    JSON.stringify(capture));
+
   const shot = await win.webContents.capturePage();
   const out = path.join(root, 'tools', '_scratch', 'smoke-app-protocol.png');
   fs.mkdirSync(path.dirname(out), { recursive: true });

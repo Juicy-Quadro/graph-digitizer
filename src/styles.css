@@ -889,6 +889,50 @@ html[data-theme="light"] .data-table tbody tr:nth-child(even) td { background: r
 }
 
 /* ==========================================================================
+   Screen capture
+   ========================================================================== */
+
+.screen-picker {
+  position: fixed; inset: 0; z-index: 120;
+  background: rgba(4, 7, 12, .84);
+  display: flex; align-items: center; justify-content: center;
+  animation: fade-in var(--fast) var(--ease);
+}
+.screen-picker[hidden] { display: none; }
+.screen-picker-frame {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-3);
+  padding: 16px;
+  display: flex; flex-direction: column; gap: 12px;
+  max-width: 96vw;
+  max-height: 96vh;
+}
+.screen-picker-stage {
+  position: relative;
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden;
+  border-radius: var(--r-sm);
+  background: var(--bg-sunken);
+  min-height: 0;
+}
+.screen-picker-stage canvas {
+  display: block;
+  max-width: 92vw;
+  max-height: calc(92vh - 150px);
+  cursor: crosshair;
+  touch-action: none;
+}
+.screen-picker-hint {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--text-faint);
+  text-align: center;
+}
+.screen-picker-actions { display: flex; gap: 8px; justify-content: flex-end; }
+
+/* ==========================================================================
    Misc
    ========================================================================== */
 

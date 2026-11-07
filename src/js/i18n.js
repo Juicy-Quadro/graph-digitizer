@@ -43,6 +43,7 @@
       'menu.help.about': 'About Graph Digitizer',
 
       'action.openImage': 'Open Image',
+      'action.captureScreen': 'Capture',
       'action.openWorkspace': 'Open',
       'action.saveWorkspace': 'Save',
       'action.export': 'Export',
@@ -202,6 +203,12 @@
       'settings.aiKeyHint': 'The key is kept encrypted in the main process and never reaches the interface. It is only used to read colour bar tick labels.',
       'settings.aiUnavailable': 'The AI bridge is not available in this build.',
       'settings.aiReady': 'Ready. The model in use is {model}.',
+
+      'screen.button': 'Capture from screen',
+      'screen.hint': 'Drag over the figure. Without a drag the whole screen is taken.',
+      'screen.take': 'Take it',
+      'screen.unavailable': 'This build cannot take a picture of the screen.',
+      'screen.failed': 'The screen could not be read.',
       'settings.aiMissing': 'No key stored yet.',
       'settings.aiSaved': 'The key was stored.',
       'settings.aiSaveFailed': 'The key could not be stored.',
@@ -307,6 +314,7 @@
       'menu.help.about': '关于',
 
       'action.openImage': '打开图片',
+      'action.captureScreen': '截屏',
       'action.openWorkspace': '打开',
       'action.saveWorkspace': '保存',
       'action.export': '导出',
@@ -469,6 +477,12 @@
       'settings.aiMissing': '尚未保存密钥。',
       'settings.aiSaved': '密钥已保存。',
       'settings.aiSaveFailed': '密钥保存失败。',
+
+      'screen.button': '截取屏幕',
+      'screen.hint': '在图上拖动框选。不拖动就是整屏。',
+      'screen.take': '截取',
+      'screen.unavailable': '当前构建不能截屏。',
+      'screen.failed': '没能读到屏幕。',
       'settings.aiForgotten': '密钥已删除。',
 
       'panel.cloud': '云图提取',

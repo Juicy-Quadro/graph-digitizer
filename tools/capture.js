@@ -220,6 +220,43 @@ app.whenReady().then(async () => {
     if (panel) panel.scrollIntoView({ block: 'end' });
     await new Promise((r) => setTimeout(r, 250));
     ` : ''}
+    ${scene === 'screen' ? `
+    // The screen capture: a picture of a screen with a figure on it, and the
+    // part that is going to be taken marked. The picture is made up, so that
+    // the capture does not need a real screen.
+    const pic = document.createElement('canvas');
+    pic.width = 1200;
+    pic.height = 800;
+    const pctx = pic.getContext('2d');
+    pctx.fillStyle = '#f2f4f8';
+    pctx.fillRect(0, 0, 1200, 800);
+    pctx.fillStyle = '#ffffff';
+    pctx.fillRect(120, 90, 620, 480);
+    pctx.strokeStyle = '#8a94a6';
+    pctx.lineWidth = 2;
+    pctx.strokeRect(120, 90, 620, 480);
+    pctx.strokeStyle = '#3a4254';
+    pctx.beginPath();
+    pctx.moveTo(180, 470); pctx.lineTo(330, 180); pctx.lineTo(470, 400);
+    pctx.lineTo(610, 150); pctx.lineTo(700, 470);
+    pctx.stroke();
+    pctx.fillStyle = '#c9d2e0';
+    pctx.font = '20px sans-serif';
+    pctx.fillText('Figure 3', 120, 70);
+    await g.openScreenPicker({ ok: true, dataURL: pic.toDataURL('image/png'), width: 1200, height: 800 });
+    await new Promise((r) => setTimeout(r, 400));
+    // Mark the figure on the picture.
+    const pick = document.getElementById('screen-picker-canvas');
+    const box = pick.getBoundingClientRect();
+    const send = (type, x, y) => pick.dispatchEvent(new PointerEvent(type, {
+      bubbles: true, cancelable: true, pointerId: 1, isPrimary: true,
+      clientX: x, clientY: y, button: 0, buttons: type === 'pointerup' ? 0 : 1
+    }));
+    send('pointerdown', box.left + box.width * 0.10, box.top + box.height * 0.10);
+    send('pointermove', box.left + box.width * 0.64, box.top + box.height * 0.74);
+    send('pointerup', box.left + box.width * 0.64, box.top + box.height * 0.74);
+    await new Promise((r) => setTimeout(r, 250));
+    ` : ''}
     ${scene === 'aicurves' ? `
     // The model reads the curves of the figure and hands them over as a
     // series. The reply is mocked so the capture does not need a key.

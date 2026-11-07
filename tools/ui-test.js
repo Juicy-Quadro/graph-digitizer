@@ -471,6 +471,51 @@ app.whenReady().then(async () => {
     Math.abs(aiCurves.px - aiCurves.expectedX) < 1 && Math.abs(aiCurves.py - aiCurves.expectedY) < 1,
     'px=' + aiCurves.px + ' py=' + aiCurves.py);
 
+  // --- the screen capture ------------------------------------------------
+  const shot = await run(`(async () => {
+    const g = window.__gd;
+    // A picture with four red corners, so that the part that is taken can be
+    // recognised afterwards.
+    const c = document.createElement('canvas');
+    c.width = 400;
+    c.height = 300;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, 400, 300);
+    ctx.fillStyle = '#f00';
+    ctx.fillRect(0, 0, 20, 20);
+    ctx.fillRect(380, 0, 20, 20);
+    ctx.fillRect(0, 280, 20, 20);
+    ctx.fillRect(380, 280, 20, 20);
+    await g.openScreenPicker({ ok: true, dataURL: c.toDataURL('image/png'), width: 400, height: 300 });
+    await new Promise((r) => setTimeout(r, 200));
+    const canvas = document.getElementById('screen-picker-canvas');
+    const open = !document.getElementById('screen-picker').hidden;
+    const box = canvas.getBoundingClientRect();
+    // Drag over the top left corner of the picture.
+    const send = (type, x, y) => canvas.dispatchEvent(new PointerEvent(type, {
+      bubbles: true, cancelable: true, pointerId: 1, isPrimary: true,
+      clientX: x, clientY: y, button: 0, buttons: type === 'pointerup' ? 0 : 1
+    }));
+    send('pointerdown', box.left + 2, box.top + 2);
+    send('pointermove', box.left + 60, box.top + 50);
+    send('pointerup', box.left + 60, box.top + 50);
+    await new Promise((r) => setTimeout(r, 100));
+    document.querySelector('[data-action="screen-take"]').click();
+    await new Promise((r) => setTimeout(r, 300));
+    return {
+      open,
+      canvasW: canvas.width,
+      canvasH: canvas.height,
+      loaded: { w: g.store.state.image.width, h: g.store.state.image.height },
+      closed: document.getElementById('screen-picker').hidden
+    };
+  })()`);
+  check('the screen picker opens', shot.open === true);
+  check('the part that was picked is taken', shot.loaded.w > 0 && shot.loaded.h > 0,
+    JSON.stringify(shot.loaded));
+  check('the picker closes after the picture is taken', shot.closed === true);
+
   console.log('\n' + (failures ? failures + ' check(s) FAILED' : 'all interface checks passed'));
   app.exit(failures ? 1 : 0);
 });
