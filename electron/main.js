@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, Menu, dialog, ipcMain, clipboard, shell, nativeTheme, protocol, desktopCapturer } = require('electron');
+const { app, BrowserWindow, Menu, dialog, ipcMain, clipboard, shell, nativeTheme, protocol, desktopCapturer, screen } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const llm = require('./llm');
@@ -270,6 +270,12 @@ ipcMain.handle('screen:capture', async () => {
   if (!mainWindow || mainWindow.isDestroyed()) {
     return { ok: false, error: 'There is no window to take the picture from.' };
   }
+  // The screen the window is on is the one that is wanted.
+  const bounds = mainWindow.getBounds();
+  const display = screen.getDisplayNearestPoint({
+    x: Math.round(bounds.x + bounds.width / 2),
+    y: Math.round(bounds.y + bounds.height / 2)
+  });
   mainWindow.hide();
   try {
     // The window needs a moment to disappear from the picture.
@@ -282,7 +288,9 @@ ipcMain.handle('screen:capture', async () => {
     if (!sources.length) {
       return { ok: false, error: 'The screen could not be read.' };
     }
-    const shot = sources[0].thumbnail;
+    const wanted = display ? String(display.id) : '';
+    const source = sources.find((s) => s.display_id === wanted) || sources[0];
+    const shot = source.thumbnail;
     if (!shot || shot.isEmpty()) {
       return { ok: false, error: 'The screen could not be read.' };
     }
