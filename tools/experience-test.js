@@ -25,6 +25,17 @@ app.whenReady().then(async () => {
 
   const run = (code) => win.webContents.executeJavaScript(code);
 
+  // --- 0. a button that cannot do anything looks like it ------------------
+  const history = await run(`({
+    undo: document.querySelector('[data-action="undo"]').disabled,
+    redo: document.querySelector('[data-action="redo"]').disabled,
+    canUndo: window.__gd.store.canUndo(),
+    canRedo: window.__gd.store.canRedo()
+  })`);
+  check('the history buttons follow what can be done',
+    history.undo === !history.canUndo && history.redo === !history.canRedo,
+    JSON.stringify(history));
+
   // --- 1. loading an image resets the previous digitising state ----------
   await run(`(async () => {
     const g = window.__gd;

@@ -1816,6 +1816,19 @@
 
   // ------------------------------------------------------------------ events
 
+  /**
+   * The buttons of the history look like they can be used.
+   *
+   * A button that cannot do anything is shown greyed out, so that nobody
+   * wonders why nothing happens when it is pressed.
+   */
+  function renderHistoryButtons() {
+    const undo = document.querySelector('[data-action="undo"]');
+    const redo = document.querySelector('[data-action="redo"]');
+    if (undo) undo.disabled = !store.canUndo();
+    if (redo) redo.disabled = !store.canRedo();
+  }
+
   function wireToolbar() {
     document.querySelectorAll('[data-action]').forEach((btn) => {
       btn.addEventListener('click', (evt) => {
@@ -2358,11 +2371,13 @@
         renderTable();
         updateStatus();
       }
+      renderHistoryButtons();
     });
 
     setTool('select');
     setLanguage(detectLanguage(), false);
     store.setUi({ theme: detectTheme(), autoColours: detectAutoColours() });
+    renderHistoryButtons();
     applyTheme();
 
     // Follow the operating system theme for as long as the user has not
