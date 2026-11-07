@@ -516,6 +516,53 @@ app.whenReady().then(async () => {
     JSON.stringify(shot.loaded));
   check('the picker closes after the picture is taken', shot.closed === true);
 
+  // --- the calibration points can be adjusted ---------------------------
+  const nudge = await run(`(async () => {
+    const g = window.__gd;
+    const t = ${JSON.stringify(truth)};
+    await g.loadImage(${JSON.stringify(dataURL)}, 'a.png', 'C:/tmp/a.png');
+    g.setCalibration(t.calibration.points, t.calibration.xScale, t.calibration.yScale);
+    g.setSampling({ method: 'color', lineColor: t.lines[t.scaleIndex].lineColor, bgColor: [255,255,255], tolerance: 0.06, minSize: 2 });
+    const line = t.lines[t.scaleIndex].points;
+    g.traceAt(line[10][0], line[10][1]);
+    g.setTool('scale');
+    const canvas = document.getElementById('canvas');
+    const rect = canvas.getBoundingClientRect();
+    const view = g.view.getView();
+    const p = t.calibration.points.xmin;
+    const x = rect.left + p.x * view.zoom + view.offsetX;
+    const y = rect.top + p.y * view.zoom + view.offsetY;
+    const send = (type, buttons) => canvas.dispatchEvent(new PointerEvent(type, {
+      bubbles: true, cancelable: true, pointerId: 1, isPrimary: true,
+      clientX: x, clientY: y, button: 0, buttons: buttons
+    }));
+    send('pointerdown', 1);
+    send('pointerup', 0);
+    const before = g.store.state.calibration.points.xmin.x;
+    const valueBefore = g.store.state.series[0].points[0].x;
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    const after = g.store.state.calibration.points.xmin.x;
+    const valueAfter = g.store.state.series[0].points[0].x;
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', shiftKey: true, bubbles: true }));
+    const fast = g.store.state.calibration.points.xmin.x;
+    return {
+      before,
+      after,
+      fast,
+      hint: !document.getElementById('calib-nudge').hidden,
+      valueBefore,
+      valueAfter
+    };
+  })()`);
+  check('a calibration point can be moved with the arrow keys',
+    nudge.after === nudge.before + 1, JSON.stringify(nudge));
+  check('the arrow key with shift moves faster',
+    nudge.fast === nudge.after + 10, JSON.stringify(nudge));
+  check('the hint about the adjustment shows up', nudge.hint === true);
+  check('the numbers follow the moved point',
+    isFinite(nudge.valueAfter) && nudge.valueAfter !== nudge.valueBefore,
+    JSON.stringify(nudge));
+
   console.log('\n' + (failures ? failures + ' check(s) FAILED' : 'all interface checks passed'));
   app.exit(failures ? 1 : 0);
 });

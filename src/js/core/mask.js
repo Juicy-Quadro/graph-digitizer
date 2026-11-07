@@ -109,9 +109,27 @@
 
   /** Remove connected components smaller than `minSize` pixels. */
   function removeSmallComponents(mask, w, h, minSize) {
+    const parts = findComponents(mask, w, h);
+    let kept = 0;
+    for (const members of parts) {
+      if (members.length >= minSize) {
+        kept += members.length;
+      } else {
+        for (let k = 0; k < members.length; k++) mask[members[k]] = 0;
+      }
+    }
+    return kept;
+  }
+
+  /**
+   * The connected pieces of a mask.
+   *
+   * Every piece is a list of the indexes of its pixels.
+   */
+  function findComponents(mask, w, h) {
     const visited = new Uint8Array(w * h);
     const stack = new Int32Array(w * h);
-    let kept = 0;
+    const parts = [];
     for (let i = 0; i < mask.length; i++) {
       if (!mask[i] || visited[i]) continue;
       let sp = 0;
@@ -137,13 +155,48 @@
           }
         }
       }
-      if (members.length >= minSize) {
-        kept += members.length;
-      } else {
-        for (let k = 0; k < members.length; k++) mask[members[k]] = 0;
-      }
+      parts.push(members);
     }
-    return kept;
+    return parts;
+  }
+
+  /**
+   * The marks of a scatter plot.
+   *
+   * A scatter plot is a field of separate marks, and every mark is one point
+   * of the figure. The centre of the piece is where the mark sits, so a
+   * hundred marks become a hundred points.
+   *
+   * @param {Uint8Array} mask
+   * @param {number} w
+   * @param {number} h
+   * @param {object} [options]
+   *   minSize : the smallest mark that is counted (default 2 pixels)
+   *   maxSize : the largest mark that is counted (default none)
+   * @returns {Array} [{ x, y, size }] the centre of every mark
+   */
+  function findBlobs(mask, w, h, options) {
+    const opt = options || {};
+    const minSize = opt.minSize === undefined ? 2 : opt.minSize;
+    const maxSize = opt.maxSize || 0;
+    const parts = findComponents(mask, w, h);
+    const out = [];
+    for (const members of parts) {
+      if (members.length < minSize) continue;
+      if (maxSize && members.length > maxSize) continue;
+      let sx = 0;
+      let sy = 0;
+      for (const idx of members) {
+        sx += idx % w;
+        sy += (idx / w) | 0;
+      }
+      out.push({
+        x: sx / members.length,
+        y: sy / members.length,
+        size: members.length
+      });
+    }
+    return out;
   }
 
   /** Grow the mask by `radius` pixels (square structuring element). */
@@ -260,6 +313,8 @@
   GD.Mask = {
     Method,
     buildMask,
+    findComponents,
+    findBlobs,
     removeSmallComponents,
     dilate,
     autoDetectColors,

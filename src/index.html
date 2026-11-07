@@ -234,6 +234,7 @@
             <button class="ghost" data-action="calib-pixel" data-i18n="calib.pixelMode">Use pixel coordinates</button>
             <button class="ghost" data-action="calib-reset" data-i18n="action.reset">Reset</button>
           </div>
+          <p class="hint" id="calib-nudge" data-i18n="calib.nudgeHint" hidden></p>
         </div>
       </section>
 
@@ -282,6 +283,8 @@
           </div>
           <button class="ghost wide" data-action="auto-detect" data-i18n="action.autoDetect">Auto Detect</button>
           <p class="hint" data-i18n="sample.colourHint">The colours of the figure are detected when it is opened.</p>
+          <button class="ghost wide" data-action="extract-scatter" data-i18n="action.extractScatter">Extract scatter points</button>
+          <p class="hint" data-i18n="sample.scatterHint">Every separate mark of the figure becomes one point. For a scatter plot.</p>
           <button class="ghost wide" data-action="ai-extract-curves" data-i18n="action.aiExtract">Extract curves with AI</button>
           <p class="hint" data-i18n="sample.aiHint">The model reads the curves of the figure and returns them as a new series.</p>
           <label class="check">

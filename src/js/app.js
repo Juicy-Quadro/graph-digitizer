@@ -51,6 +51,7 @@
     statusLogical: document.getElementById('status-logical'),
     statusCount: document.getElementById('status-count'),
     calibState: document.getElementById('calib-state'),
+    calibNudge: document.getElementById('calib-nudge'),
 
     // calibration
     calibRows: Array.from(document.querySelectorAll('[data-calib]')),
@@ -110,6 +111,8 @@
   let maskInfo = null;
   let calibration = null;
   let calibPending = null;   // { key, step }
+  let calibSelected = null;  // the calibration point that is being adjusted
+  let calibSaved = false;    // whether the state before the adjustment was saved
   let tracePending = null;   // { x, y } first click of a directional trace
   let areaDrag = null;       // { start, current }
   let maskTimer = null;
@@ -540,6 +543,10 @@
     });
     el.calibXScale.value = s.xScale;
     el.calibYScale.value = s.yScale;
+    if (el.calibNudge) {
+      // The hint only shows when there is something to adjust.
+      el.calibNudge.hidden = !CALIB_ORDER.every((key) => s.points[key]);
+    }
 
     const result = calibration || buildCalibration();
     if (!result.ok) {
@@ -573,6 +580,39 @@
     store.setIn('calibration', { points: points });
     buildCalibration();
     recomputePointValues();
+  }
+
+  /**
+   * Take a calibration point and move it.
+   *
+   * The four points are the base of every number, and a point that was
+   * clicked one pixel off costs a whole figure. So a point that is already
+   * there can be taken and moved: with the mouse, or with the arrow keys
+   * once it is selected.
+   */
+  function selectCalibPoint(key) {
+    calibSelected = key;
+    calibSaved = false;
+    canvasView.setCalibMode(key ? { key: key } : null);
+    renderCalibPanel();
+  }
+
+  function moveCalibPoint(key, x, y) {
+    const points = store.state.calibration.points;
+    if (!points[key]) return;
+    if (!calibSaved) {
+      store.pushUndo();
+      calibSaved = true;
+    }
+    setCalibPoint(key, x, y);
+  }
+
+  /** Move the selected calibration point with the arrow keys. */
+  function nudgeCalibPoint(key, dx, dy) {
+    const p = store.state.calibration.points[key];
+    if (!p) return false;
+    moveCalibPoint(key, p.x + dx, p.y + dy);
+    return true;
   }
 
   function defaultValueFor(key) {
@@ -677,6 +717,7 @@
       b.classList.toggle('active', b.getAttribute('data-tool') === tool);
     });
     el.stage.className = 'stage tool-' + tool;
+    canvasView.setTool(tool);
     el.statusTool.textContent = t('tool.' + tool);
     el.stageHint.textContent = t('tool.' + tool + '.hint');
     canvasView.emit('view', view.getView());
@@ -684,6 +725,7 @@
     if (tool !== 'trace') tracePending = null;
     if (tool !== 'scale') {
       calibPending = null;
+      calibSelected = null;
       canvasView.setCalibMode(null);
       renderCalibPanel();
     }
@@ -2184,6 +2226,7 @@
         break;
       }
       case 'auto-detect': autoDetect(); break;
+      case 'extract-scatter': extractScatter(); break;
       case 'ai-extract-curves': aiExtractCurves(); break;
       case 'calib-reset': resetCalibration(); break;
       case 'calib-pixel': pixelCalibration(); break;
@@ -2306,6 +2349,46 @@
     renderCalibPanel();
   }
 
+  /**
+   * The marks of a scatter plot.
+   *
+   * A scatter plot is a field of separate marks, and every mark is one point
+   * of the figure. The centre of the piece is where the mark sits, so a
+   * hundred marks become a hundred points.
+   */
+  function extractScatter() {
+    if (!image) {
+      toast(t('msg.noImage'), 'error');
+      return;
+    }
+    flushMaskUpdate();
+    if (!maskInfo) recomputeMask();
+    if (!maskInfo || !maskInfo.mask) {
+      toast(t('msg.noCurve'), 'error');
+      return;
+    }
+    const minSize = Math.max(2, Math.round(store.state.sampling.minSize) || 2);
+    const blobs = Mask.findBlobs(maskInfo.mask, maskInfo.width, maskInfo.height, {
+      minSize: minSize
+    });
+    if (!blobs.length) {
+      toast(t('msg.noCurve'), 'error');
+      return;
+    }
+    const pts = blobs.map((b) => {
+      const p = { px: b.x, py: b.y, x: b.x, y: b.y };
+      if (calibration && calibration.ok) {
+        const l = calibration.toLogical(b.x, b.y);
+        p.x = l.x;
+        p.y = l.y;
+      }
+      return p;
+    });
+    store.pushUndo();
+    store.setSeriesPoints(store.state.activeSeries, pts);
+    toast(t('msg.scatterDone', { n: pts.length }), 'ok');
+  }
+
   function autoDetect() {
     if (!image) {
       toast(t('msg.noImage'), 'error');
@@ -2357,6 +2440,33 @@
     buildCalibration();
     recomputePointValues();
     renderTable();
+  }
+
+  /**
+   * An image that was copied somewhere else.
+   *
+   * A figure of a paper is usually copied out of a reader or a PDF, and then
+   * it is pasted right here (Ctrl+V).
+   */
+  function wireClipboardPaste() {
+    document.addEventListener('paste', (evt) => {
+      const items = evt.clipboardData && evt.clipboardData.items;
+      if (!items) return;
+      for (const item of items) {
+        if (item.kind !== 'file' || !/^image\//.test(item.type)) continue;
+        const file = item.getAsFile();
+        if (!file) continue;
+        evt.preventDefault();
+        const reader = new FileReader();
+        reader.onload = () => {
+          loadImageFromDataURL(reader.result, file.name || 'clipboard.png', null);
+          toast(t('msg.pasted'), 'ok');
+        };
+        reader.onerror = () => toast(t('msg.noImage'), 'error');
+        reader.readAsDataURL(file);
+        return;
+      }
+    });
   }
 
   // ------------------------------------------------------------------ keyboard
@@ -2440,6 +2550,25 @@
         return;
       }
 
+      /*
+       * A calibration point that has been selected is moved with the arrow
+       * keys. Shift makes it move faster.
+       */
+      if (store.state.ui.tool === 'scale' && calibSelected) {
+        const step = evt.shiftKey ? 10 : 1;
+        let dx = 0;
+        let dy = 0;
+        if (evt.key === 'ArrowLeft') dx = -step;
+        else if (evt.key === 'ArrowRight') dx = step;
+        else if (evt.key === 'ArrowUp') dy = -step;
+        else if (evt.key === 'ArrowDown') dy = step;
+        if (dx || dy) {
+          evt.preventDefault();
+          nudgeCalibPoint(calibSelected, dx, dy);
+          return;
+        }
+      }
+
       if (evt.key.toLowerCase() === 'f') {
         view.fit();
         updateStatus();
@@ -2464,6 +2593,7 @@
     wireToolbar();
     wireKeyboard();
     wireDragAndDrop();
+    wireClipboardPaste();
     wireInspector();
     wireScreenPicker();
     setInspectorTab('curves');
@@ -2474,6 +2604,10 @@
     canvasView.on('dragend', handleDragEnd);
     canvasView.on('cursor', (cursor) => updateStatus(cursor));
     canvasView.on('view', () => updateStatus());
+    canvasView.on('calibpick', (info) => selectCalibPoint(info.key));
+    canvasView.on('calibdrag', (info) => {
+      moveCalibPoint(info.key, info.image.x, info.image.y);
+    });
 
     if (window.gd && window.gd.onMenuAction) {
       window.gd.onMenuAction((payload) => {

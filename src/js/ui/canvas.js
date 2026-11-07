@@ -468,6 +468,38 @@
     let dragStart = null;
     let spaceDown = false;
     let panning = false;
+    /** The calibration point that is being moved, if any. */
+    let draggingCalib = null;
+
+    /** Whether the four calibration points are all there. */
+    function calibrationComplete() {
+      if (!calibPoints) return false;
+      return !!(calibPoints.xmin && calibPoints.xmax && calibPoints.ymin && calibPoints.ymax);
+    }
+
+    /**
+     * The calibration point under the pointer.
+     *
+     * The point is looked for in screen pixels, so that it can be taken
+     * with the mouse at any zoom.
+     */
+    function calibPointAt(screen) {
+      if (!calibPoints) return null;
+      const order = ['xmin', 'xmax', 'ymin', 'ymax'];
+      let best = null;
+      let bestDist = 0;
+      for (const key of order) {
+        const p = calibPoints[key];
+        if (!p) continue;
+        const s = imageToScreen(p.x, p.y);
+        const d = Math.sqrt((s.x - screen.x) * (s.x - screen.x) + (s.y - screen.y) * (s.y - screen.y));
+        if (d <= 14 && (best === null || d < bestDist)) {
+          best = key;
+          bestDist = d;
+        }
+      }
+      return best;
+    }
 
     function localPoint(evt) {
       const rect = canvas.getBoundingClientRect();
@@ -486,6 +518,20 @@
         return;
       }
       if (evt.button !== 0) return;
+      /*
+       * A calibration point that is already there can be taken and moved.
+       * The four points are the base of every number, and a point that was
+       * clicked one pixel off costs a whole figure.
+       */
+      if (opt.tool === 'scale' && calibrationComplete()) {
+        const key = calibPointAt(p);
+        if (key) {
+          draggingCalib = key;
+          try { canvas.setPointerCapture(evt.pointerId); } catch (e) { void e; }
+          emit('calibpick', { key: key, image: img, event: evt });
+          return;
+        }
+      }
       dragging = true;
       dragStart = { img: img, screen: p };
       try { canvas.setPointerCapture(evt.pointerId); } catch (e) { void e; }
@@ -502,6 +548,11 @@
         emit('view', Object.assign({}, view));
         return;
       }
+      if (draggingCalib) {
+        emit('calibdrag', { key: draggingCalib, image: img, event: evt });
+        emit('cursor', { image: img, screen: p });
+        return;
+      }
       if (dragging && dragStart) {
         emit('drag', { image: img, screen: p, origin: dragStart.img, start: dragStart.screen, event: evt });
       }
@@ -516,6 +567,12 @@
         dragStart = null;
         canvas.parentElement.classList.remove('panning');
         try { canvas.releasePointerCapture(evt.pointerId); } catch (e) { void e; }
+        return;
+      }
+      if (draggingCalib) {
+        draggingCalib = null;
+        try { canvas.releasePointerCapture(evt.pointerId); } catch (e) { void e; }
+        emit('calibdragend', { image: img, event: evt });
         return;
       }
       if (dragging) {
@@ -630,6 +687,11 @@
       },
       setCalibMode(mode) {
         calibMode = mode;
+        render();
+      },
+      setTool(tool) {
+        if (opt.tool === tool) return;
+        opt.tool = tool;
         render();
       },
       setSeries(list, active) {
