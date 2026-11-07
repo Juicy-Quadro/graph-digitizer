@@ -58,6 +58,7 @@
 
   --rail-w: 68px;
   --inspector-w: 304px;
+  --tabs-h: 42px;
   --title-h: 46px;
 }
 
@@ -408,6 +409,7 @@ html[data-theme="light"] .stage {
   position: sticky;
   top: 0;
   z-index: 5;
+  height: var(--tabs-h);
   background: var(--bg-panel);
   border-bottom: 1px solid var(--border);
 }
@@ -443,8 +445,10 @@ html[data-theme="light"] .stage {
   margin: 0; padding: 13px 15px 10px;
   font-size: 10.5px; font-weight: 650; letter-spacing: .09em;
   text-transform: uppercase; color: var(--text-faint);
-  position: sticky; top: 0; z-index: 3;
-  background: linear-gradient(180deg, var(--bg-panel) 72%, transparent);
+  /* The title sticks under the tabs of the inspector, not under them. */
+  position: sticky; top: var(--tabs-h); z-index: 3;
+  background: var(--bg-panel);
+  box-shadow: 0 7px 8px -7px rgba(0, 0, 0, .45);
 }
 .panel-title::before {
   content: '';
@@ -609,7 +613,11 @@ button:disabled { opacity: .4; pointer-events: none; }
    ========================================================================== */
 
 .drawer {
-  height: 226px;
+  /*
+   * The table takes a part of the window, but never so much that the
+   * figure has no room left in a short window.
+   */
+  height: min(226px, 30vh);
   display: flex; flex-direction: column;
   background: var(--bg-panel);
   border-top: 1px solid var(--border);
@@ -890,7 +898,15 @@ html[data-theme="light"] .data-table tbody tr:nth-child(even) td { background: r
   :root { --rail-w: 60px; --inspector-w: 272px; }
   .tool em { display: none; }
   .tool { width: 46px; padding: 10px 0; }
+  /* The marker of the tool in use has to stay inside the rail. */
+  .tool.active::before { left: -7px; }
   .brand-text span { display: none; }
+}
+
+/* A short window: the tools of the rail have to fit without a scroll. */
+@media (max-height: 780px) {
+  .tool { padding: 5px 0; }
+  .rail-sep { margin: 4px 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {

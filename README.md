@@ -63,10 +63,11 @@
 
 ### 其它
 
-- **界面中英双语**，主题**默认跟随系统**，三处入口任选其一
+- **界面中英双语**，主题**默认跟随系统**，设置都收在一个齿轮按钮里
 - **数据表可排序、可双击编辑、可选中删除**，与画布联动
 - 滚轮缩放（以光标为中心）、`Ctrl+滚轮` 精细缩放、空格+拖动平移
 - 底部数据表可折叠
+- **窗口大小变化时界面跟着变**：图会重新适应窗口（手动放大过之后就保住看的那一块），数据表最多占三成高度，工具栏在矮窗口里也放得下
 
 ---
 
@@ -270,7 +271,7 @@ X = interp(xminValue, xmaxValue, u)   （对数轴时在 log 空间插值）
 
 ## 精度验证 · Validation
 
-八套可执行回归，覆盖算法、模型解析、跨层一致性、主题、交互体验、安全策略、指针手势与真实论文图：
+九套可执行回归，覆盖算法、模型解析、跨层一致性、主题、交互体验、安全策略、指针手势、窗口布局与真实论文图：
 
 ```bash
 node tools/run-tests.js
@@ -285,6 +286,7 @@ node tools/run-tests.js
 | `tools/experience-test.js` | `electron tools/experience-test.js` | 换图重置、标定重算、掩膜开关、系列改名、空状态引导，**6 项** |
 | `tools/smoke-test.js` | `electron tools/smoke-test.js` | 真实主进程启动：`app://` 协议、CSP 拦截、测试钩子门控，**11 项** |
 | `tools/ui-test.js` | `electron tools/ui-test.js` | 指针手势阈值、选中态同步、编辑后点击不丢、云图全流程，**18 项** |
+| `tools/layout-test.js` | `electron tools/layout-test.js` | 五种窗口尺寸下的布局：控件越界、被盖、叠在一起，**16 项** |
 | `tools/paper-test.js` | `electron tools/paper-test.js` | **真实 arXiv 论文图**上的色标提取与数值场还原，**20 项** |
 
 论文图夹具来自 arXiv 论文 2601.00342 的源码包，`python tools/fetch_paper_figures.py` 可随时重建。
@@ -342,7 +344,7 @@ src/
       canvas.js    画布渲染与交互
       table.js     虚拟化数据表
 tools/
-  run-tests.js               跑全部八套回归
+  run-tests.js               跑全部九套回归
   algorithm-test.js          算法测试
   llm-test.js                模型提示词与解析测试
   cross-check.js             跨层一致性检查
@@ -350,6 +352,7 @@ tools/
   experience-test.js         交互体验回归
   smoke-test.js              真实主进程冒烟测试
   ui-test.js                 指针手势、选中态与云图回归
+  layout-test.js             窗口尺寸下的布局审计
   paper-test.js              真实论文图回归
   build_fixtures.py          从 GetData 样例生成真值夹具
   fetch_paper_figures.py     取真实 arXiv 论文图

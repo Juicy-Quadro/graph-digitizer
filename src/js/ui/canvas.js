@@ -77,12 +77,35 @@
       return { w: rect.width, h: rect.height };
     }
 
+    /**
+     * Whether the figure sits in the window as a whole.
+     *
+     * While that is the case the figure is fitted again whenever the window
+     * changes, so that a smaller window never cuts it off.
+     */
+    let fitted = false;
+    let lastSize = { w: 0, h: 0 };
+
     function resize() {
       const size = cssSize();
+      // How much the window grew or shrank.
+      const dx = (size.w - lastSize.w) / 2;
+      const dy = (size.h - lastSize.h) / 2;
       dpr = window.devicePixelRatio || 1;
       canvas.width = Math.max(1, Math.round(size.w * dpr));
       canvas.height = Math.max(1, Math.round(size.h * dpr));
+      lastSize = size;
+      if (fitted) {
+        // The figure follows the window.
+        fit();
+        return;
+      }
+      // Otherwise it keeps its place in the middle of the window, so that a
+      // change of the size does not lose the part that is being looked at.
+      view.offsetX += dx;
+      view.offsetY += dy;
       render();
+      emit('view', Object.assign({}, view));
     }
 
     function fit() {
@@ -96,6 +119,7 @@
       view.zoom = Math.max(0.02, Math.min(40, zoom));
       view.offsetX = (size.w - image.width * view.zoom) / 2;
       view.offsetY = (size.h - image.height * view.zoom) / 2;
+      fitted = true;
       render();
       emit('view', Object.assign({}, view));
     }
@@ -108,6 +132,7 @@
       view.zoom = Math.max(0.02, Math.min(40, view.zoom * factor));
       view.offsetX = ax - before.x * view.zoom;
       view.offsetY = ay - before.y * view.zoom;
+      fitted = false;
       render();
       emit('view', Object.assign({}, view));
     }
@@ -120,6 +145,7 @@
       view.zoom = Math.max(0.02, Math.min(40, zoom));
       view.offsetX = ax - before.x * view.zoom;
       view.offsetY = ay - before.y * view.zoom;
+      fitted = false;
       render();
       emit('view', Object.assign({}, view));
     }
