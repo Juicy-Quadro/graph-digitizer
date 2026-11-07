@@ -39,6 +39,27 @@ $notes = @'
 Digitise data points out of graphs and plots in images, and the colours of a
 contour map into numbers.
 
+### What is new in 1.5.1
+
+**One door for the settings, and nothing twice.**
+
+The language and the theme could be changed in three places: a switch and a button in the
+title bar, two submenus of the native menu and the settings dialog. The same setting in
+three places makes people wonder which one is the real one.
+
+- **The title bar keeps a single gear**, and the native menu a single entry that opens
+  the same dialog. Everything the user can change about the application itself is in
+  that one panel.
+- **The panel is sorted into three groups** with a heading of their own: appearance
+  (language, theme), behaviour and AI. The key of the model has a group of its own.
+- **A new switch turns the automatic finding of the colours of a figure off**, for the
+  figures that hold several curves in the same colour.
+- **The data table does not carry an export button any more.** The export is in the
+  toolbar and in the export page, and the table keeps the buttons that are about the
+  table.
+- **The undo and redo buttons are greyed out** when there is nothing to undo, so that
+  nobody wonders why nothing happens when they are pressed.
+
 ### What is new in 1.5.0
 
 **Fewer steps to the numbers.**
